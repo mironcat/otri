@@ -564,13 +564,12 @@ const exportTable = (datatype) => {
 };
 </script>
 <style>
-svg {
+image {
+  border: 5px solid #ea0b0b;
+}
+#canvas svg {
   border-style: solid;
   border-color: gray;
   border-width: thin;
-}
-
-image {
-  border: 5px solid #ea0b0b;
 }
 </style>
