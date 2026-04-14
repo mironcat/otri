@@ -48,12 +48,14 @@
           v-model="om.side"
           val="left"
           label="Left"
+          @click="bus.emit('side-change', 'blue')"
         />
         <q-radio
           v-show="om.lateral_side"
           v-model="om.side"
           val="right"
           label="Right"
+          @click="bus.emit('side-change', 'gray')"
         />
 
         <q-toggle

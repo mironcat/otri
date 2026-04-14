@@ -11,9 +11,9 @@
           @click="toggleLeftDrawer"
         />
 
-        <q-toolbar-title> OtriRAM </q-toolbar-title>
+        <q-toolbar-title> Otri </q-toolbar-title>
 
-        <div>OtriRAM ver 0.2</div>
+        <small>v0.2</small>
       </q-toolbar>
     </q-header>
 

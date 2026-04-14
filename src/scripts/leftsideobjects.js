@@ -49,6 +49,16 @@ export default function leftSideObjects(draw, om, scales, bus) {
     .rect(moDat.bFwidth, moDat.bFheight)
     .stroke("gray")
     .fill({ color: "blue", opacity: 0.02 });
+
+  const sideLabel = draw
+    .text(om.value.side === "right" ? "flat right" : "flat left")
+    .font({
+      fill: "black",
+      size: 14,
+      family: "Arial",
+    })
+    .move(0, -17);
+
   const frameResizer = draw
     .rect(15, 15)
     .fill({ color: om.value.side == "left" ? "darkblue" : "red" })
@@ -70,7 +80,8 @@ export default function leftSideObjects(draw, om, scales, bus) {
     .group()
     .attr({ id: "mobjects" })
     .add(baseFrame)
-    .add(frameResizer);
+    .add(frameResizer)
+    .add(sideLabel);
   // tangent PMC points connection line
   const PCMpolylineCoords = [
     [aPMC.attr("cx"), aPMC.attr("cy")],
@@ -343,6 +354,10 @@ export default function leftSideObjects(draw, om, scales, bus) {
   bus.on("lateral-show", (visible) => {
     visible ? mobjects.show() : mobjects.hide();
     updateMeasures();
+  });
+  bus.on("side-change", (sidecolor) => {
+    baseFrame.attr({ stroke: sidecolor });
+    sideLabel.text(om.value.side === "right" ? "flat right" : "flat left");
   });
   pdTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
