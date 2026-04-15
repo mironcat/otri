@@ -389,6 +389,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
     );
     updateMeasures();
   });
+
   pdTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
     pdTangentLine.attr({
@@ -401,15 +402,45 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   });
 
   adTangentPoint.on("dragmove.namespace", function (event) {
-    // om.value.ad.alfa >0 and om.value.ad.alfa <90
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    adTangentLine.attr({
-      x1: attrs_bf.x,
-      y1: attrs_bf.y,
-      x2: this.attr("cx"),
-      y2: this.attr("cy"),
-    });
-    updateMeasures();
+    const pointX = this.attr("cx");
+    const pointY = this.attr("cy");
+
+    // Проверяем, находится ли точка внутри baseFrame
+    if (
+      pointX >= attrs_bf.x &&
+      pointX <= attrs_bf.x + attrs_bf.width &&
+      pointY >= attrs_bf.y &&
+      pointY <= attrs_bf.y + attrs_bf.height
+    ) {
+      adTangentLine.attr({
+        x1: attrs_bf.x,
+        y1: attrs_bf.y,
+        x2: pointX,
+        y2: pointY,
+      });
+      updateMeasures();
+    } else {
+      // Если точка вышла за границы, возвращаем её к ближайшей границе
+      const clampedX = Math.max(
+        attrs_bf.x,
+        Math.min(pointX, attrs_bf.x + attrs_bf.width)
+      );
+      const clampedY = Math.max(
+        attrs_bf.y,
+        Math.min(pointY, attrs_bf.y + attrs_bf.height)
+      );
+
+      this.attr({ cx: clampedX, cy: clampedY });
+
+      adTangentLine.attr({
+        x1: attrs_bf.x,
+        y1: attrs_bf.y,
+        x2: clampedX,
+        y2: clampedY,
+      });
+      updateMeasures();
+    }
   });
   pvTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
