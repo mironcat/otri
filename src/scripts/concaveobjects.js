@@ -30,7 +30,10 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   const pMargin = 0.15; // persents
   let tPC = {
     //tangentPointsCoords
-    ad: { x: moDat.bFwidth * pMargin, y: moDat.bFheight * pMargin },
+    ad: {
+      x: moDat.bFwidth * pMargin,
+      y: moDat.bFheight * pMargin,
+    },
     pd: {
       x: moDat.bFwidth - moDat.bFwidth * pMargin,
       y: moDat.bFheight * pMargin,
@@ -384,6 +387,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
     sideLabel.text(
       om.value.side === "right" ? "concave right" : "concave left"
     );
+    updateMeasures();
   });
   pdTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
@@ -397,6 +401,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   });
 
   adTangentPoint.on("dragmove.namespace", function (event) {
+    // om.value.ad.alfa >0 and om.value.ad.alfa <90
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
     adTangentLine.attr({
       x1: attrs_bf.x,
@@ -518,10 +523,11 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   }
   function updateMeasures() {
     updateAdditionalObjects();
+
     om.value.length = baseFrame.attr("width") * scales.value.factor;
     om.value.height = baseFrame.attr("height") * scales.value.factor;
     const bFA = baseFrame.attr(["x", "y", "width", "height"]);
-    const p = {
+    const cp = {
       //coordinates of baseFrame corner points
       ad: { x: bFA.x, y: bFA.y },
       pd: { x: bFA.x + bFA.width, y: bFA.y },
@@ -530,106 +536,107 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
     };
     // alfa
     om.value.ad.alfa = getAngleBetweenPoints(
-      p.ad.x,
-      p.ad.y,
+      cp.ad.x,
+      cp.ad.y,
       dPMC.attr("cx"),
       dPMC.attr("cy"),
       adTangentPoint.attr("cx"),
       adTangentPoint.attr("cy")
     );
-    om.value.av.alfa = Math.abs(
+    om.value.av.alfa =
       getAngleBetweenPoints(
-        p.av.x,
-        p.av.y,
+        cp.av.x,
+        cp.av.y,
         avPMC.attr("cx"),
         avPMC.attr("cy"),
         avTangentPoint.attr("cx"),
         avTangentPoint.attr("cy")
-      )
-    );
-    om.value.pd.alfa = getAngleBetweenPoints(
-      p.pd.x,
-      p.pd.y,
-      pdTangentPoint.attr("cx"),
-      pdTangentPoint.attr("cy"),
-      dPMC.attr("cx"),
-      dPMC.attr("cy")
-    );
-    om.value.pv.alfa = Math.abs(
+      ) * -1;
+
+    om.value.pd.alfa =
       getAngleBetweenPoints(
-        p.pv.x,
-        p.pv.y,
-        pvTangentPoint.attr("cx"),
-        pvTangentPoint.attr("cy"),
+        cp.pd.x,
+        cp.pd.y,
+        dPMC.attr("cx"),
+        dPMC.attr("cy"),
+        pdTangentPoint.attr("cx"),
+        pdTangentPoint.attr("cy")
+      ) * -1;
+    om.value.pv.alfa =
+      getAngleBetweenPoints(
+        cp.pv.x,
+        cp.pv.y,
         pvPMC.attr("cx"),
-        pvPMC.attr("cy")
-      ) - 360
-    );
+        pvPMC.attr("cy"),
+        pvTangentPoint.attr("cx"),
+        pvTangentPoint.attr("cy")
+      ) + 360;
+
     // hc
-    om.value.ad.hc = (dPMC.attr("cx") - p.ad.x) * scales.value.factor;
-    om.value.av.hc = (avPMC.attr("cx") - p.av.x) * scales.value.factor;
-    om.value.pd.hc = (p.pd.x - dPMC.attr("cx")) * scales.value.factor;
-    om.value.pv.hc = (p.pv.x - pvPMC.attr("cx")) * scales.value.factor;
+    om.value.ad.hc = (dPMC.attr("cx") - cp.ad.x) * scales.value.factor;
+    om.value.av.hc = (avPMC.attr("cx") - cp.av.x) * scales.value.factor;
+    om.value.pd.hc = (cp.pd.x - dPMC.attr("cx")) * scales.value.factor;
+    om.value.pv.hc = (cp.pv.x - pvPMC.attr("cx")) * scales.value.factor;
     // vc
-    om.value.ad.vc = (aPMC.attr("cy") - p.ad.y) * scales.value.factor;
-    om.value.av.vc = (p.av.y - aPMC.attr("cy")) * scales.value.factor;
-    om.value.pd.vc = (pPMC.attr("cy") - p.pd.y) * scales.value.factor;
-    om.value.pv.vc = (p.pv.y - pPMC.attr("cy")) * scales.value.factor;
+    om.value.ad.vc = (aPMC.attr("cy") - cp.ad.y) * scales.value.factor;
+    om.value.av.vc = (cp.av.y - aPMC.attr("cy")) * scales.value.factor;
+    om.value.pd.vc = (pPMC.attr("cy") - cp.pd.y) * scales.value.factor;
+    om.value.pv.vc = (cp.pv.y - pPMC.attr("cy")) * scales.value.factor;
     // ln
     om.value.ad.ln =
       getLengthByCoordinates({
-        x1: p.ad.x,
-        y1: p.ad.y,
+        x1: cp.ad.x,
+        y1: cp.ad.y,
         x2: adCrossPoint.attr("cx"),
         y2: adCrossPoint.attr("cy"),
       }) * scales.value.factor;
     om.value.pd.ln =
       getLengthByCoordinates({
-        x1: p.pd.x,
-        y1: p.pd.y,
+        x1: cp.pd.x,
+        y1: cp.pd.y,
         x2: pdCrossPoint.attr("cx"),
         y2: pdCrossPoint.attr("cy"),
       }) * scales.value.factor;
     om.value.av.ln =
       getLengthByCoordinates({
-        x1: p.av.x,
-        y1: p.av.y,
+        x1: cp.av.x,
+        y1: cp.av.y,
         x2: avCrossPoint.attr("cx"),
         y2: avCrossPoint.attr("cy"),
       }) * scales.value.factor;
     om.value.pv.ln =
       getLengthByCoordinates({
-        x1: p.pv.x,
-        y1: p.pv.y,
+        x1: cp.pv.x,
+        y1: cp.pv.y,
         x2: pvCrossPoint.attr("cx"),
         y2: pvCrossPoint.attr("cy"),
       }) * scales.value.factor;
     // sln
     om.value.ad.sln =
       getLengthByCoordinates({
-        x1: p.ad.x,
-        y1: p.ad.y,
+        x1: cp.ad.x,
+        y1: cp.ad.y,
         x2: adTangentPoint.attr("cx"),
         y2: adTangentPoint.attr("cy"),
       }) * scales.value.factor;
     om.value.pd.sln =
       getLengthByCoordinates({
-        x1: p.pd.x,
-        y1: p.pd.y,
+        x1: cp.pd.x,
+        y1: cp.pd.y,
         x2: pdTangentPoint.attr("cx"),
         y2: pdTangentPoint.attr("cy"),
       }) * scales.value.factor;
     om.value.av.sln =
       getLengthByCoordinates({
-        x1: p.av.x,
-        y1: p.av.y,
+        x1: cp.av.x,
+        y1: cp.av.y,
         x2: avTangentPoint.attr("cx"),
         y2: avTangentPoint.attr("cy"),
       }) * scales.value.factor;
     om.value.pv.sln =
       getLengthByCoordinates({
-        x1: p.pv.x,
-        y1: p.pv.y,
+        x1: cp.pv.x,
+        y1: cp.pv.y,
         x2: pvTangentPoint.attr("cx"),
         y2: pvTangentPoint.attr("cy"),
       }) * scales.value.factor;
@@ -682,6 +689,19 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
       x2: apL.pv.en.x,
       y2: apL.pv.en.y,
     });
+    // В конце функции, перед bus.emit
+    if (om.value.side === "right") {
+      // Сохранить временные копии
+      const tempPd = { ...om.value.pd };
+      const tempPv = { ...om.value.pv };
+      const tempAd = { ...om.value.ad };
+      const tempAv = { ...om.value.av };
+      // Поменять местами
+      om.value.pd = tempAd;
+      om.value.pv = tempAv;
+      om.value.ad = tempPd;
+      om.value.av = tempPv;
+    }
     bus.emit("measure-updated", om.value);
   }
 

@@ -10,7 +10,15 @@
     "format": "prettier --write \"**/*.{js,vue,scss,html,md,json}\" --ignore-path .gitignore",
     "test": "echo \"No test specified\" && exit 0",
     "dev": "quasar dev",
-    "build": "quasar build"
+    "build": "quasar build",
+    "build:electron": "quasar build -m electron",
+    "build:electron:win64": "quasar build -m electron -T win32 --arch x64",
+    "build:electron:win32": "quasar build -m electron -T win32 --arch ia32",
+    "build:electron:debug": "quasar build -m electron -d",
+    "build:electron:ui": "quasar build -m electron -s",
+    "clean": "quasar clean",
+    "package:win": "npm run build:electron && powershell Copy-Item 'dist/README_Portable.txt' 'dist/electron/Packaged/win-unpacked/README.txt' && powershell Compress-Archive -Path \"dist/electron/Packaged/win-unpacked/*\" -DestinationPath \"dist/Otri_v${npm_package_version}_Windows_x64_Portable.zip\" -Force",
+    "release:win": "npm run clean && npm run package:win"
   },
   "dependencies": {
     "@quasar/cli": "^4.0.0",
@@ -25,6 +33,7 @@
     "@quasar/app-vite": "^1.11.0",
     "autoprefixer": "^10.5.0",
     "electron": "^22.3.27",
+    "electron-builder": "^26.8.1",
     "electron-packager": "^17.1.2",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^8.10.2",

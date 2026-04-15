@@ -358,6 +358,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
   bus.on("side-change", (sidecolor) => {
     baseFrame.attr({ stroke: sidecolor });
     sideLabel.text(om.value.side === "right" ? "flat right" : "flat left");
+    updateMeasures();
   });
   pdTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
@@ -599,10 +600,25 @@ export default function leftSideObjects(draw, om, scales, bus) {
         x2: pvTangentPoint.attr("cx"),
         y2: pvTangentPoint.attr("cy"),
       }) * scales.value.factor;
+
+    if (om.value.side === "right") {
+      // Сохранить временные копии
+      const tempPd = { ...om.value.pd };
+      const tempPv = { ...om.value.pv };
+      const tempAd = { ...om.value.ad };
+      const tempAv = { ...om.value.av };
+      // Поменять местами
+      om.value.pd = tempAd;
+      om.value.pv = tempAv;
+      om.value.ad = tempPd;
+      om.value.av = tempPv;
+    }
+
     // lv
     om.value.v.lv = 0;
     om.value.v.lvl = 0;
     om.value.v.dv = 0;
+
     bus.emit("measure-updated", om.value);
   }
   function show(visible) {
