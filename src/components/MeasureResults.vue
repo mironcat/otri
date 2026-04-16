@@ -41,7 +41,9 @@
     </q-item>
   </q-list>
   <q-list v-show="om.dorsal_side" dense>
-    <q-item-label header> Dorsal side </q-item-label>
+    <q-item-label header>
+      Dorsal side {{ om.half ? "(half)" : "" }}
+    </q-item-label>
     <q-item>
       <strong class="q-mr-sm">Length(dorsal):</strong>
       {{ om.length_dorsal.toFixed(1) }}<strong class="q-mx-sm">Width:</strong>

@@ -13,7 +13,7 @@
 
         <q-toolbar-title> Otri </q-toolbar-title>
 
-        <small>v0.2</small>
+        <small>v{{ version }}</small>
       </q-toolbar>
     </q-header>
 
@@ -37,6 +37,8 @@
 import { ref } from "vue";
 import MeasureResults from "components/MeasureResults.vue";
 import InterpretationResults from "components/InterpretationResults.vue";
+import { APP_VERSION } from "../config/version";
+const version = APP_VERSION;
 // const bus = inject('bus')
 // import EssentialLink from 'components/EssentialLink.vue'
 const leftDrawerOpen = ref(true);
