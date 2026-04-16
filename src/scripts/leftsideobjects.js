@@ -19,6 +19,7 @@ import {
   getLengthByCoordinates,
   addMouseOverToPoint,
   getLineFromAnglePoint,
+  constrainPointMovement,
 } from "src/scripts/utils.js";
 export default function leftSideObjects(draw, om, scales, bus) {
   let mobjects = draw.group().attr({ id: "lso" });
@@ -68,7 +69,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
   // const aPMC = draw.circle(10).fill('red').draggable().move(-5, moDat.bFheight / 2)
   const createPMCpoint = (x, y) =>
     addMouseOverToPoint(
-      draw.circle().radius(5).fill("red").draggable().move(x, y)
+      draw.circle().radius(5).fill("red").draggable().move(x, y),
     );
 
   const aPMC = createPMCpoint(-5, moDat.bFheight / 2);
@@ -105,7 +106,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
   // tangent objects
   const createTangentPoint = (x, y) =>
     addMouseOverToPoint(
-      draw.circle().radius(5).fill("orange").draggable().move(x, y)
+      draw.circle().radius(5).fill("orange").draggable().move(x, y),
     );
   const adTangentPoint = createTangentPoint(tPC.ad.x, tPC.ad.y);
   const pdTangentPoint = createTangentPoint(tPC.pd.x, tPC.pd.y);
@@ -173,28 +174,28 @@ export default function leftSideObjects(draw, om, scales, bus) {
   mobjects.add(avTangentLine).add(avTangentPoint);
   mobjects.add(pvTangentLine).add(pvTangentPoint);
   adTangentPoint.on("mouseover", () =>
-    adAnglePointLine.stroke({ color: "red", width: 2 })
+    adAnglePointLine.stroke({ color: "red", width: 2 }),
   );
   adTangentPoint.on("mouseout", () =>
-    adAnglePointLine.stroke({ color: "gray", width: 1 })
+    adAnglePointLine.stroke({ color: "gray", width: 1 }),
   );
   pdTangentPoint.on("mouseover", () =>
-    pdAnglePointLine.stroke({ color: "red", width: 2 })
+    pdAnglePointLine.stroke({ color: "red", width: 2 }),
   );
   pdTangentPoint.on("mouseout", () =>
-    pdAnglePointLine.stroke({ color: "gray", width: 1 })
+    pdAnglePointLine.stroke({ color: "gray", width: 1 }),
   );
   avTangentPoint.on("mouseover", () =>
-    avAnglePointLine.stroke({ color: "red", width: 2 })
+    avAnglePointLine.stroke({ color: "red", width: 2 }),
   );
   avTangentPoint.on("mouseout", () =>
-    avAnglePointLine.stroke({ color: "gray", width: 1 })
+    avAnglePointLine.stroke({ color: "gray", width: 1 }),
   );
   pvTangentPoint.on("mouseover", () =>
-    pvAnglePointLine.stroke({ color: "red", width: 2 })
+    pvAnglePointLine.stroke({ color: "red", width: 2 }),
   );
   pvTangentPoint.on("mouseout", () =>
-    pvAnglePointLine.stroke({ color: "gray", width: 1 })
+    pvAnglePointLine.stroke({ color: "gray", width: 1 }),
   );
   //----------------------------------------------------------------
 
@@ -362,43 +363,47 @@ export default function leftSideObjects(draw, om, scales, bus) {
   });
   pdTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    pdTangentLine.attr({
-      x1: attrs_bf.x + attrs_bf.width,
-      y1: attrs_bf.y,
-      x2: this.attr("cx"),
-      y2: this.attr("cy"),
-    });
-    updateMeasures();
+    constrainPointMovement(
+      this,
+      baseFrame,
+      attrs_bf.x + attrs_bf.width,
+      attrs_bf.y,
+      pdTangentLine,
+      updateMeasures,
+    );
   });
   adTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    adTangentLine.attr({
-      x1: attrs_bf.x,
-      y1: attrs_bf.y,
-      x2: this.attr("cx"),
-      y2: this.attr("cy"),
-    });
-    updateMeasures();
+    constrainPointMovement(
+      this,
+      baseFrame,
+      attrs_bf.x,
+      attrs_bf.y,
+      adTangentLine,
+      updateMeasures,
+    );
   });
   pvTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    pvTangentLine.attr({
-      x1: attrs_bf.x + attrs_bf.width,
-      y1: attrs_bf.height + attrs_bf.y,
-      x2: this.attr("cx"),
-      y2: this.attr("cy"),
-    });
-    updateMeasures();
+    constrainPointMovement(
+      this,
+      baseFrame,
+      attrs_bf.x + attrs_bf.width,
+      attrs_bf.height + attrs_bf.y,
+      pvTangentLine,
+      updateMeasures,
+    );
   });
   avTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    avTangentLine.attr({
-      x1: attrs_bf.x,
-      y1: attrs_bf.height + attrs_bf.y,
-      x2: this.attr("cx"),
-      y2: this.attr("cy"),
-    });
-    updateMeasures();
+    constrainPointMovement(
+      this,
+      baseFrame,
+      attrs_bf.x,
+      attrs_bf.height + attrs_bf.y,
+      avTangentLine,
+      updateMeasures,
+    );
   });
   aPMC.on("dragmove.namespace", function (event) {
     // const bFA = baseFrame.attr(['x', 'y', 'width'])
@@ -502,7 +507,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
       dPMC.attr("cx"),
       dPMC.attr("cy"),
       adTangentPoint.attr("cx"),
-      adTangentPoint.attr("cy")
+      adTangentPoint.attr("cy"),
     );
     om.value.av.alfa = Math.abs(
       getAngleBetweenPoints(
@@ -511,8 +516,8 @@ export default function leftSideObjects(draw, om, scales, bus) {
         vPMC.attr("cx"),
         vPMC.attr("cy"),
         avTangentPoint.attr("cx"),
-        avTangentPoint.attr("cy")
-      )
+        avTangentPoint.attr("cy"),
+      ),
     );
     om.value.pd.alfa = getAngleBetweenPoints(
       p.pd.x,
@@ -520,7 +525,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
       pdTangentPoint.attr("cx"),
       pdTangentPoint.attr("cy"),
       dPMC.attr("cx"),
-      dPMC.attr("cy")
+      dPMC.attr("cy"),
     );
     om.value.pv.alfa = Math.abs(
       getAngleBetweenPoints(
@@ -529,8 +534,8 @@ export default function leftSideObjects(draw, om, scales, bus) {
         pvTangentPoint.attr("cx"),
         pvTangentPoint.attr("cy"),
         vPMC.attr("cx"),
-        vPMC.attr("cy")
-      ) - 360
+        vPMC.attr("cy"),
+      ) - 360,
     );
     // hc
     om.value.ad.hc = (dPMC.attr("cx") - p.ad.x) * scales.value.factor;

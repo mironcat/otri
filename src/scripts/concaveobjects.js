@@ -19,6 +19,8 @@ import {
   getLengthByCoordinates,
   addMouseOverToPoint,
   getLineFromAnglePoint,
+  constrainPointMovement,
+  constrainVerticalPointMovement,
 } from "src/scripts/utils.js";
 export default function concaveLeftSideObjects(draw, om, scales, bus) {
   let mobjects = draw.group().attr({ id: "concave-lso" });
@@ -72,7 +74,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   // PMC points
   const createPMCpoint = (x, y) =>
     addMouseOverToPoint(
-      draw.circle().radius(5).fill("red").draggable().move(x, y)
+      draw.circle().radius(5).fill("red").draggable().move(x, y),
     );
   const aPMC = createPMCpoint(-5, moDat.bFheight / 2);
   const pPMC = createPMCpoint(moDat.bFwidth - 5, moDat.bFheight / 2);
@@ -109,7 +111,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   // tangent objects
   const createTangentPoint = (x, y) =>
     addMouseOverToPoint(
-      draw.circle().radius(5).fill("orange").draggable().move(x, y)
+      draw.circle().radius(5).fill("orange").draggable().move(x, y),
     );
   const adTangentPoint = createTangentPoint(tPC.ad.x, tPC.ad.y);
   const pdTangentPoint = createTangentPoint(tPC.pd.x, tPC.pd.y);
@@ -187,28 +189,28 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   mobjects.add(avTangentLine).add(avTangentPoint);
   mobjects.add(pvTangentLine).add(pvTangentPoint);
   adTangentPoint.on("mouseover", () =>
-    adAnglePointLine.stroke({ color: "red", width: 2 })
+    adAnglePointLine.stroke({ color: "red", width: 2 }),
   );
   adTangentPoint.on("mouseout", () =>
-    adAnglePointLine.stroke({ color: "gray", width: 1 })
+    adAnglePointLine.stroke({ color: "gray", width: 1 }),
   );
   pdTangentPoint.on("mouseover", () =>
-    pdAnglePointLine.stroke({ color: "red", width: 2 })
+    pdAnglePointLine.stroke({ color: "red", width: 2 }),
   );
   pdTangentPoint.on("mouseout", () =>
-    pdAnglePointLine.stroke({ color: "gray", width: 1 })
+    pdAnglePointLine.stroke({ color: "gray", width: 1 }),
   );
   avTangentPoint.on("mouseover", () =>
-    avAnglePointLine.stroke({ color: "red", width: 2 })
+    avAnglePointLine.stroke({ color: "red", width: 2 }),
   );
   avTangentPoint.on("mouseout", () =>
-    avAnglePointLine.stroke({ color: "gray", width: 1 })
+    avAnglePointLine.stroke({ color: "gray", width: 1 }),
   );
   pvTangentPoint.on("mouseover", () =>
-    pvAnglePointLine.stroke({ color: "red", width: 2 })
+    pvAnglePointLine.stroke({ color: "red", width: 2 }),
   );
   pvTangentPoint.on("mouseout", () =>
-    pvAnglePointLine.stroke({ color: "gray", width: 1 })
+    pvAnglePointLine.stroke({ color: "gray", width: 1 }),
   );
 
   function getAnglePointLineCoordinates() {
@@ -385,93 +387,65 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   bus.on("side-change", (sidecolor) => {
     baseFrame.attr({ stroke: sidecolor });
     sideLabel.text(
-      om.value.side === "right" ? "concave right" : "concave left"
+      om.value.side === "right" ? "concave right" : "concave left",
     );
     updateMeasures();
   });
 
   pdTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    pdTangentLine.attr({
-      x1: attrs_bf.x + attrs_bf.width,
-      y1: attrs_bf.y,
-      x2: this.attr("cx"),
-      y2: this.attr("cy"),
-    });
-    updateMeasures();
+    constrainPointMovement(
+      this,
+      baseFrame,
+      attrs_bf.x + attrs_bf.width,
+      attrs_bf.y,
+      pdTangentLine,
+      updateMeasures,
+    );
   });
 
   adTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    const pointX = this.attr("cx");
-    const pointY = this.attr("cy");
-
-    // Проверяем, находится ли точка внутри baseFrame
-    if (
-      pointX >= attrs_bf.x &&
-      pointX <= attrs_bf.x + attrs_bf.width &&
-      pointY >= attrs_bf.y &&
-      pointY <= attrs_bf.y + attrs_bf.height
-    ) {
-      adTangentLine.attr({
-        x1: attrs_bf.x,
-        y1: attrs_bf.y,
-        x2: pointX,
-        y2: pointY,
-      });
-      updateMeasures();
-    } else {
-      // Если точка вышла за границы, возвращаем её к ближайшей границе
-      const clampedX = Math.max(
-        attrs_bf.x,
-        Math.min(pointX, attrs_bf.x + attrs_bf.width)
-      );
-      const clampedY = Math.max(
-        attrs_bf.y,
-        Math.min(pointY, attrs_bf.y + attrs_bf.height)
-      );
-
-      this.attr({ cx: clampedX, cy: clampedY });
-
-      adTangentLine.attr({
-        x1: attrs_bf.x,
-        y1: attrs_bf.y,
-        x2: clampedX,
-        y2: clampedY,
-      });
-      updateMeasures();
-    }
+    constrainPointMovement(
+      this,
+      baseFrame,
+      attrs_bf.x,
+      attrs_bf.y,
+      adTangentLine,
+      updateMeasures,
+    );
   });
   pvTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    pvTangentLine.attr({
-      x1: attrs_bf.x + attrs_bf.width,
-      y1: attrs_bf.height + attrs_bf.y,
-      x2: this.attr("cx"),
-      y2: this.attr("cy"),
-    });
-    updateMeasures();
+    constrainPointMovement(
+      this,
+      baseFrame,
+      attrs_bf.x + attrs_bf.width,
+      attrs_bf.height + attrs_bf.y,
+      pvTangentLine,
+      updateMeasures,
+    );
   });
   avTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    avTangentLine.attr({
-      x1: attrs_bf.x,
-      y1: attrs_bf.height + attrs_bf.y,
-      x2: this.attr("cx"),
-      y2: this.attr("cy"),
-    });
-    updateMeasures();
+    constrainPointMovement(
+      this,
+      baseFrame,
+      attrs_bf.x,
+      attrs_bf.height + attrs_bf.y,
+      avTangentLine,
+      updateMeasures,
+    );
   });
   vTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
-    // vTangentLine.attr({ x1: attrs_bf.x, y1: attrs_bf.height + attrs_bf.y, x2: this.attr('cx'), y2: this.attr('cy') })
-    vTangentLine.attr({
-      x1: vTangentPoint.attr("cx"),
-      y1: attrs_bf.height + attrs_bf.y,
-      x2: vTangentPoint.attr("cx"),
-      y2: vTangentPoint.attr("cy"),
-    });
-    updateMeasures();
+    constrainVerticalPointMovement(
+      this,
+      baseFrame,
+      attrs_bf.height + attrs_bf.y,
+      vTangentLine,
+      updateMeasures,
+    );
   });
   aPMC.on("dragmove.namespace", function (event) {
     // const bFA = baseFrame.attr(['x', 'y', 'width'])
@@ -572,7 +546,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
       dPMC.attr("cx"),
       dPMC.attr("cy"),
       adTangentPoint.attr("cx"),
-      adTangentPoint.attr("cy")
+      adTangentPoint.attr("cy"),
     );
     om.value.av.alfa =
       getAngleBetweenPoints(
@@ -581,7 +555,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
         avPMC.attr("cx"),
         avPMC.attr("cy"),
         avTangentPoint.attr("cx"),
-        avTangentPoint.attr("cy")
+        avTangentPoint.attr("cy"),
       ) * -1;
 
     om.value.pd.alfa =
@@ -591,7 +565,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
         dPMC.attr("cx"),
         dPMC.attr("cy"),
         pdTangentPoint.attr("cx"),
-        pdTangentPoint.attr("cy")
+        pdTangentPoint.attr("cy"),
       ) * -1;
     om.value.pv.alfa =
       getAngleBetweenPoints(
@@ -600,7 +574,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
         pvPMC.attr("cx"),
         pvPMC.attr("cy"),
         pvTangentPoint.attr("cx"),
-        pvTangentPoint.attr("cy")
+        pvTangentPoint.attr("cy"),
       ) + 360;
 
     // hc
