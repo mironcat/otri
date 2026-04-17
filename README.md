@@ -1,43 +1,7 @@
 # [O]stracods and [tri]angles
 
-Fossil ostracod measuring using method of triangles
+Fossil ostracod measuring using the method of right triangles (Naumcheva, 2019).
 
-## Install the dependencies
+## References
 
-```bash
-yarn
-# or
-npm install
-```
-
-### Start the app in development mode (hot-code reloading, error reporting, etc.)
-
-```bash
-quasar dev
-```
-
-### Lint the files
-
-```bash
-yarn lint
-# or
-npm run lint
-```
-
-### Format the files
-
-```bash
-yarn format
-# or
-npm run format
-```
-
-### Build the app for production
-
-```bash
-quasar build
-```
-
-### Customize the configuration
-
-See [Configuring quasar.config.js](https://v2.quasar.dev/quasar-cli-vite/quasar-config-js).
+Naumcheva, M.A. A New Method for Description of Smooth Ostracod Shells, Using Permian and Triassic Ostracods from Eastern Europe // Paleontological Journal. 2019. Vol. 53. № 6. P. 616–628.
