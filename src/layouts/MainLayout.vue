@@ -47,6 +47,17 @@
           >
             <q-tooltip>Вертикальная направляющая 2</q-tooltip>
           </q-btn>
+          <q-btn
+            flat
+            dense
+            round
+            icon="search"
+            :color="magnifierVisible ? 'pink-4' : 'grey-6'"
+            aria-label="Toggle magnifier"
+            @click="toggleMagnifier"
+          >
+            <q-tooltip>Лупа при перетаскивании точек (клавиша Z)</q-tooltip>
+          </q-btn>
         </q-btn-group>
 
         <small>v{{ version }}</small>
@@ -70,13 +81,18 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import MeasureResults from "components/MeasureResults.vue";
 import InterpretationResults from "components/InterpretationResults.vue";
 import {
   getGuidesVisibility,
   setGuideVisible,
 } from "../scripts/guides";
+import {
+  getMagnifierVisible,
+  onMagnifierChange,
+  setMagnifierVisible,
+} from "../scripts/magnifier";
 import { APP_VERSION } from "../config/version";
 const version = APP_VERSION;
 // const bus = inject('bus')
@@ -91,4 +107,15 @@ function toggleGuide(key) {
   guidesVisible.value[key] = !guidesVisible.value[key];
   setGuideVisible(key, guidesVisible.value[key]);
 }
+
+const magnifierVisible = ref(getMagnifierVisible());
+function toggleMagnifier() {
+  setMagnifierVisible(!magnifierVisible.value);
+}
+// Кнопка следит за состоянием лупы (переключение клавишей Z и т.п.)
+onMounted(() => {
+  onMagnifierChange((v) => {
+    magnifierVisible.value = v;
+  });
+});
 </script>
