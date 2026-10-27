@@ -172,6 +172,12 @@ module.exports = configure(function (/* ctx */) {
 
       bundler: "builder", // 'packager' or 'builder'
 
+      // Quasar runs `pnpm install --prod` in dist/electron/UnPackaged;
+      // without --ignore-workspace pnpm resolves the workspace root and,
+      // in --prod mode, prunes root node_modules dev dependencies
+      // (which breaks the subsequent require('electron-builder'))
+      unPackagedInstallParams: ["install", "--prod", "--ignore-workspace"],
+
       packager: {
         // https://github.com/electron-userland/electron-packager/blob/master/docs/api.md#options
         // OS X / Mac App Store
@@ -193,13 +199,14 @@ module.exports = configure(function (/* ctx */) {
         },
         win: {
           target: "portable",
-          arch: ["x64"],
+          // arch задаётся в target или CLI (quasar build -m electron -T win32 --arch x64)
           icon: "src-electron/icons/icon.ico",
         },
         portable: {
           artifactName: "Otri-${version}-${arch}.exe",
         },
-        files: ["dist/electron/UnPackaged/**/*"],
+        // files задавать не нужно: Quasar уже указывает directories.app
+        // = dist/electron/UnPackaged, electron-builder упаковывает всё из него
         extraResources: [
           {
             from: "src-electron/icons/",
@@ -207,12 +214,6 @@ module.exports = configure(function (/* ctx */) {
             filter: ["**/*"],
           },
         ],
-      },
-
-      builder: {
-        // https://www.electron.build/configuration/configuration
-
-        appId: "otri",
       },
     },
 
