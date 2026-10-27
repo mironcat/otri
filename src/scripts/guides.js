@@ -124,3 +124,25 @@ export function initGuides(draw, size = {}) {
 
   return current;
 }
+
+// Подгонка направляющих под новые размеры canvas
+// (линии тянутся/укорачиваются, позиции сохраняются)
+export function resizeGuides(width, height) {
+  if (!elements) return;
+  const w = Number(width) || 0;
+  const h = Number(height) || 0;
+  if (w <= 0 || h <= 0) return;
+
+  const clampPos = (p, max) => Math.min(Math.max(p, 0), max);
+
+  const hG = elements.h;
+  hG.core.plot(0, clampPos(hG.position(), h), w, clampPos(hG.position(), h));
+  hG.hit.size(w, HIT_THICKNESS).y(clampPos(hG.position(), h) - HIT_THICKNESS / 2);
+
+  ["v1", "v2"].forEach((key) => {
+    const g = elements[key];
+    const pos = clampPos(g.position(), w);
+    g.core.plot(pos, 0, pos, h);
+    g.hit.size(HIT_THICKNESS, h).x(pos - HIT_THICKNESS / 2);
+  });
+}

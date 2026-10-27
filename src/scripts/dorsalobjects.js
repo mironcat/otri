@@ -21,6 +21,7 @@ import {
   getLineFromAnglePoint,
   constrainPointMovement,
 } from "src/scripts/utils.js";
+import { applyScales, getLineScale } from "src/scripts/geostyle.js";
 export default function DorsalSideObjects(draw, om, scales, bus) {
   let mobjects = draw.group().attr({ id: "dso" });
   let moDat = {
@@ -48,7 +49,7 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
   };
   const baseFrame = draw
     .rect(moDat.bFwidth, moDat.bFheight)
-    .stroke("gray")
+    .stroke({ color: "gray", width: 1 })
     .fill({ color: "green", opacity: 0.02 });
   const frameResizer = draw
     .rect(15, 15)
@@ -163,28 +164,28 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
   mobjects.add(avTangentLine).add(avTangentPoint);
   mobjects.add(pvTangentLine).add(pvTangentPoint);
   adTangentPoint.on("mouseover", () =>
-    adAnglePointLine.stroke({ color: "red", width: 2 }),
+    adAnglePointLine.stroke({ color: "red", width: 2 * getLineScale() }),
   );
   adTangentPoint.on("mouseout", () =>
-    adAnglePointLine.stroke({ color: "gray", width: 1 }),
+    adAnglePointLine.stroke({ color: "gray", width: 1 * getLineScale() }),
   );
   pdTangentPoint.on("mouseover", () =>
-    pdAnglePointLine.stroke({ color: "red", width: 2 }),
+    pdAnglePointLine.stroke({ color: "red", width: 2 * getLineScale() }),
   );
   pdTangentPoint.on("mouseout", () =>
-    pdAnglePointLine.stroke({ color: "gray", width: 1 }),
+    pdAnglePointLine.stroke({ color: "gray", width: 1 * getLineScale() }),
   );
   avTangentPoint.on("mouseover", () =>
-    avAnglePointLine.stroke({ color: "red", width: 2 }),
+    avAnglePointLine.stroke({ color: "red", width: 2 * getLineScale() }),
   );
   avTangentPoint.on("mouseout", () =>
-    avAnglePointLine.stroke({ color: "gray", width: 1 }),
+    avAnglePointLine.stroke({ color: "gray", width: 1 * getLineScale() }),
   );
   pvTangentPoint.on("mouseover", () =>
-    pvAnglePointLine.stroke({ color: "red", width: 2 }),
+    pvAnglePointLine.stroke({ color: "red", width: 2 * getLineScale() }),
   );
   pvTangentPoint.on("mouseout", () =>
-    pvAnglePointLine.stroke({ color: "gray", width: 1 }),
+    pvAnglePointLine.stroke({ color: "gray", width: 1 * getLineScale() }),
   );
 
   function getAnglePointLineCoordinates() {
@@ -596,11 +597,36 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
   function show(visible) {
     visible ? mobjects.show() : mobjects.hide();
   }
+  function refreshPoints() {
+    // программная «встряска» тангенсных точек: их dragmove-обработчики
+    // пересчитывают линии к углам рамки и меры.
+    // ВАЖНО: fire("dragmove") без namespace — svg.js хранит обработчики
+    // под именем без namespace, и fire с namespace их не находит
+    [adTangentPoint, pdTangentPoint, avTangentPoint, pvTangentPoint].forEach(
+      (p) => p.fire("dragmove"),
+    );
+  }
+  // применить текущие множители размеров (точки/линии) — только r и stroke-width
+  applyScales(mobjects);
   return {
     addMeasureObjects,
     updateMeasures,
     show,
     // внутренняя группа с точками/рамкой — для перетаскивания вслед за картинкой
     mobjects,
+    // точки по ролям + рамка
+    points: {
+      a: aPMC,
+      p: pPMC,
+      d: rPMC,
+      v: lPMC,
+      t_ad: adTangentPoint,
+      t_pd: pdTangentPoint,
+      t_av: avTangentPoint,
+      t_pv: pvTangentPoint,
+    },
+    baseFrame,
+    frameResizer,
+    refreshPoints,
   };
 }

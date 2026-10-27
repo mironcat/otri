@@ -83,7 +83,7 @@
       </div>
     </div>
     <div class="row q-ma-md">
-      <div id="canvas" ref="canvasRef"></div>
+      <div id="canvas" ref="canvasRef" class="col"></div>
     </div>
     <div class="row q-ma-md q-gutter-sm flex items-center">
       <q-file
@@ -624,17 +624,17 @@ const rows = ref({
   dorsal: [],
 });
 
-import { inject } from "vue";
+import { watch, inject } from "vue";
 import { exportFile } from "quasar";
 import "@svgdotjs/svg.draggable.js";
 import { Matrix } from "@svgdotjs/svg.js";
-import { onMounted, ref } from "vue";
+import { onMounted, onBeforeUnmount, ref } from "vue";
 // import { lineTolineIntersectionPoint, getLengthByCoordinates, getAnglePoints } from 'src/scripts/utils.js'
 import { initScalebar, getScalebarLength } from "src/scripts/scalebar.js";
 import leftSideObjects from "src/scripts/leftsideobjects.js";
 import DorsalSideObjects from "src/scripts/dorsalobjects.js";
 import concaveLeftSideObjects from "src/scripts/concaveobjects.js";
-import { initGuides } from "src/scripts/guides.js";
+import { initGuides, resizeGuides } from "src/scripts/guides.js";
 import { initMagnifier } from "src/scripts/magnifier.js";
 
 const canvasRef = ref();
@@ -643,6 +643,7 @@ const imagefile = ref(null);
 // let draggableMainImage = ref(true)
 let draw = inject("svg");
 let bus = inject("bus");
+let canvasResizeObserver = null;
 const om = ref({
   record_no: 0,
   label: "no label",
@@ -691,10 +692,82 @@ let lso = leftSideObjects(draw, om, scales, bus);
 let dso = DorsalSideObjects(draw, om, scales, bus);
 let concave_lso = concaveLeftSideObjects(draw, om, scales, bus);
 
+// --- Синхронизация похожих точек между режимами измерения ------------------
+// Совпадающие роли: PMC-точки a/p/d (сверху-слева, справа, снизу-сверху)
+// и тангенсные точки ad/pd/av/pv. При переключении Concave ventral margin
+// точки и рамка неработающего режима копируются из активного, чтобы
+// оба набора оставались привязанными к одним и тем же местам изображения.
+const SYNC_ROLES = ["a", "p", "d", "t_ad", "t_pd", "t_av", "t_pv"];
+
+const syncOverlays = (active, target) => {
+  if (
+    !active ||
+    !target ||
+    !active.points ||
+    !target.points ||
+    !target.refreshPoints
+  ) {
+    return;
+  }
+  SYNC_ROLES.forEach((role) => {
+    const s = active.points[role];
+    const d = target.points[role];
+    if (s && d) d.attr({ cx: s.attr("cx"), cy: s.attr("cy") });
+  });
+  // рамка должна совпадать (линии тангенсов идут от её углов)
+  if (active.baseFrame && target.baseFrame) {
+    target.baseFrame.attr({
+      x: active.baseFrame.attr("x"),
+      y: active.baseFrame.attr("y"),
+      width: active.baseFrame.attr("width"),
+      height: active.baseFrame.attr("height"),
+    });
+    target.frameResizer.attr({
+      x: active.frameResizer.attr("x"),
+      y: active.frameResizer.attr("y"),
+    });
+  }
+  // пересчитать зависимую геометрию (линии к углам, кресты, меры)
+  target.refreshPoints();
+};
+
+watch(
+  () => om.value.concave_vs,
+  () => {
+    if (om.value.concave_vs) syncOverlays(lso, concave_lso);
+    else syncOverlays(concave_lso, lso);
+  },
+);
+
+// --- Управление визуальными размерами точек и линий -------------------------
+// Кнопка "tune" в шапке меняет множители; здесь применяем их
+// относительно предыдущих значений к группам всех трёх наборов.
+import { changeScales } from "src/scripts/geostyle.js";
+
+// Подгонка размеров SVG под контейнер: вся доступная ширина,
+// высота фиксированная (600, как и раньше).
+function sizeCanvasToContainer() {
+  if (!canvasRef.value) return;
+  const width = Math.max(canvasRef.value.clientWidth, 400);
+  draw.size(width, 600);
+  resizeGuides(width, 600);
+}
+
+bus.on("geo-style-changed", ({ prevPoint, prevLine }) => {
+  [lso, dso, concave_lso].forEach((obj) => {
+    if (obj && obj.mobjects) changeScales(obj.mobjects, prevPoint, prevLine);
+  });
+});
+
 onMounted(() => {
   // console.log(canvasRef.value)
   // draw = initSVG(canvasRef.value)
-  draw.addTo(canvasRef.value).size(1000, 600);
+  draw.addTo(canvasRef.value);
+  sizeCanvasToContainer();
+  // Канвас занимает всю доступную ширину; при изменении размеров
+  // контейнера (окно, drawer, dock) SVG подстраивается автоматически.
+  canvasResizeObserver = new ResizeObserver(sizeCanvasToContainer);
+  canvasResizeObserver.observe(canvasRef.value);
   // initMObjects(draw)
   addScaleBar();
   lso.addMeasureObjects().updateMeasures();
@@ -706,6 +779,13 @@ onMounted(() => {
   bus.emit("concave-vs", om.value.lateral_side & om.value.concave_vs);
   bus.emit("dorsal-show", om.value.dorsal_side);
   // this.console.log(canvasRef.value)
+});
+
+onBeforeUnmount(() => {
+  if (canvasResizeObserver) {
+    canvasResizeObserver.disconnect();
+    canvasResizeObserver = null;
+  }
 });
 
 const addRecord = () => {
@@ -920,6 +1000,8 @@ const fileUploaded = (file) => {
   concave_lso.addMeasureObjects().updateMeasures();
   initGuides(draw);
   initMagnifier(draw);
+  // направляющие создаются с дефолтным размером — подгоняем под текущий канвас
+  sizeCanvasToContainer();
   bus.emit("lateral-show", om.value.lateral_side & !om.value.concave_vs);
   bus.emit("concave-vs", om.value.lateral_side & om.value.concave_vs);
   bus.emit("dorsal-show", om.value.dorsal_side);
