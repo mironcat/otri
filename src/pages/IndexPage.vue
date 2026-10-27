@@ -633,6 +633,7 @@ import { initScalebar, getScalebarLength } from "src/scripts/scalebar.js";
 import leftSideObjects from "src/scripts/leftsideobjects.js";
 import DorsalSideObjects from "src/scripts/dorsalobjects.js";
 import concaveLeftSideObjects from "src/scripts/concaveobjects.js";
+import { initGuides } from "src/scripts/guides.js";
 
 const canvasRef = ref();
 // let imagepath = ref('/src/assets/ost1.jpg')
@@ -697,6 +698,7 @@ onMounted(() => {
   lso.addMeasureObjects().updateMeasures();
   dso.addMeasureObjects().updateMeasures();
   concave_lso.addMeasureObjects().updateMeasures();
+  initGuides(draw);
   bus.emit("lateral-show", om.value.lateral_side & !om.value.concave_vs);
   bus.emit("concave-vs", om.value.lateral_side & om.value.concave_vs);
   bus.emit("dorsal-show", om.value.dorsal_side);
@@ -850,6 +852,7 @@ const fileUploaded = (file) => {
   lso.addMeasureObjects().updateMeasures();
   dso.addMeasureObjects().updateMeasures();
   concave_lso.addMeasureObjects().updateMeasures();
+  initGuides(draw);
   bus.emit("lateral-show", om.value.lateral_side & !om.value.concave_vs);
   bus.emit("concave-vs", om.value.lateral_side & om.value.concave_vs);
   bus.emit("dorsal-show", om.value.dorsal_side);

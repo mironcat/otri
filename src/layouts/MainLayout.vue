@@ -13,6 +13,42 @@
 
         <q-toolbar-title> Otri </q-toolbar-title>
 
+        <q-btn-group flat>
+          <q-btn
+            flat
+            dense
+            round
+            icon="border_horizontal"
+            :color="guidesVisible.h ? 'pink-4' : 'grey-6'"
+            aria-label="Toggle horizontal guide"
+            @click="toggleGuide('h')"
+          >
+            <q-tooltip>Горизонтальная направляющая</q-tooltip>
+          </q-btn>
+          <q-btn
+            flat
+            dense
+            round
+            icon="border_vertical"
+            :color="guidesVisible.v1 ? 'pink-4' : 'grey-6'"
+            aria-label="Toggle vertical guide 1"
+            @click="toggleGuide('v1')"
+          >
+            <q-tooltip>Вертикальная направляющая 1</q-tooltip>
+          </q-btn>
+          <q-btn
+            flat
+            dense
+            round
+            icon="border_vertical"
+            :color="guidesVisible.v2 ? 'pink-4' : 'grey-6'"
+            aria-label="Toggle vertical guide 2"
+            @click="toggleGuide('v2')"
+          >
+            <q-tooltip>Вертикальная направляющая 2</q-tooltip>
+          </q-btn>
+        </q-btn-group>
+
         <small>v{{ version }}</small>
       </q-toolbar>
     </q-header>
@@ -37,6 +73,10 @@
 import { ref } from "vue";
 import MeasureResults from "components/MeasureResults.vue";
 import InterpretationResults from "components/InterpretationResults.vue";
+import {
+  getGuidesVisibility,
+  setGuideVisible,
+} from "../scripts/guides";
 import { APP_VERSION } from "../config/version";
 const version = APP_VERSION;
 // const bus = inject('bus')
@@ -44,5 +84,11 @@ const version = APP_VERSION;
 const leftDrawerOpen = ref(true);
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;
+}
+
+const guidesVisible = ref(getGuidesVisibility());
+function toggleGuide(key) {
+  guidesVisible.value[key] = !guidesVisible.value[key];
+  setGuideVisible(key, guidesVisible.value[key]);
 }
 </script>
