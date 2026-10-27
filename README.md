@@ -4,6 +4,8 @@
 остракод на микрофотографиях **методом треугольников**: размеры и угловые параметры
 раковины вычисляются из «треугольников», размечаемых пользователем прямо на снимке.
 
+Fossil ostracod measuring using the method of right triangles (Naumcheva, 2019).
+
 ## Возможности
 
 - Загрузка изображения раковины; зум, поворот, перетаскивание, фиксация изображения.
@@ -107,3 +109,7 @@ quasar.config.js             # конфигурация Quasar CLI
 ## Настройка конфигурации
 
 Подробнее о параметрах сборки: [Configuring quasar.config.js](https://v2.quasar.dev/quasar-cli-vite/quasar-config-js).
+
+## References
+
+Naumcheva, M.A. A New Method for Description of Smooth Ostracod Shells, Using Permian and Triassic Ostracods from Eastern Europe // Paleontological Journal. 2019. Vol. 53. № 6. P. 616–628.
