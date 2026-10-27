@@ -627,6 +627,7 @@ const rows = ref({
 import { inject } from "vue";
 import { exportFile } from "quasar";
 import "@svgdotjs/svg.draggable.js";
+import { Matrix } from "@svgdotjs/svg.js";
 import { onMounted, ref } from "vue";
 // import { lineTolineIntersectionPoint, getLengthByCoordinates, getAnglePoints } from 'src/scripts/utils.js'
 import { initScalebar, getScalebarLength } from "src/scripts/scalebar.js";
@@ -815,13 +816,76 @@ const getFactor = () => {
     scales.value.length /
     (getScalebarLength(scalebar, scales) * scales.value.zoom);
 };
+
+// Группы векторных оверлеев (точки, рамки, линии), которые должны
+// «следовать» за изображением при зуме
+const followGroups = () =>
+  [lso, dso, concave_lso].flatMap((o) => (o && o.mobjects ? [o.mobjects] : []));
+
+// Масштабирует оверлеи вместе с картинкой так, чтобы они остались
+// привязанными к тем же точкам изображения.
+// Картинка масштабируется svg.js вокруг локального центра её содержимого
+// (матрица C); оверлею нужно применить ту же трансформацию, сконъюгированную
+// матрицей картинки: G = M_img · C · M_img⁻¹. Работает при любом уже
+// применённом перетаскивании/повороте/зуме картинки.
+const followZoom = (factor) => {
+  if (factor === 1) return;
+  const mimg = mainimage.matrixify();
+  const b = mainimage.bbox(); // локальный бокс содержимого картинки
+  const C = new Matrix().scaleO(
+    factor,
+    factor,
+    b.x + b.width / 2,
+    b.y + b.height / 2,
+  );
+  const G = mimg.clone().multiplyO(C).multiplyO(mimg.clone().inverseO());
+  followGroups().forEach((g) => {
+    const M = new Matrix(G).multiplyO(g.matrixify());
+    g.attr("transform", M);
+    keepVisualSizes(g, factor);
+  });
+};
+
+// Держим визуальные размеры элементов постоянными на экране:
+// меняется только их положение (групповая матрица G выше), а
+// радиусы точек, толщина линий и шрифты компенсируются.
+const keepVisualSizes = (g, s) => {
+  // обводки любой ширины: браузер сам компенсирует масштаб группы
+  g.find("line, polyline, rect, circle, text").forEach((el) =>
+    el.attr("vector-effect", "non-scaling-stroke"),
+  );
+  // радиусы точек: делим на масштаб текущего шага —
+  // визуальный радиус остаётся прежним (накопление учитывается автоматически)
+  g.find("circle").forEach((c) => {
+    const r = c.attr("r");
+    if (r) c.attr("r", r / s);
+  });
+  // текст
+  g.find("text").forEach((t) => {
+    const fs = t.attr("font-size");
+    if (fs) t.attr("font-size", fs / s);
+  });
+  // маленькие квадратные ручки (frameResizer ~15×15);
+  // большой rect (baseFrame) не трогаем — это область измерения,
+  // её углы должны оставаться привязанными к точкам изображения
+  g.find("rect").forEach((r) => {
+    const w = r.attr("width");
+    if (w && w <= 24) {
+      r.attr("width", w / s);
+      r.attr("height", r.attr("height") / s);
+    }
+  });
+};
+
 const zoomIn = () => {
   mainimage.scale(1.1);
+  followZoom(1.1);
   scales.value.zoom = scales.value.zoom * 1.1;
   getFactor();
 };
 const zoomOut = () => {
   mainimage.scale(0.9);
+  followZoom(0.9);
   scales.value.zoom = scales.value.zoom * 0.9;
   getFactor();
 };

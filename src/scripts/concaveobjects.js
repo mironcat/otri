@@ -714,5 +714,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
     addMeasureObjects,
     updateMeasures,
     show,
+    // внутренняя группа с точками/рамкой — для перетаскивания вслед за картинкой
+    mobjects,
   };
 }
