@@ -12,6 +12,10 @@ const visibility = { h: true, v1: true, v2: true };
 // Ссылки на текущие элементы направляющих (реализации на текущем draw)
 let elements = null;
 
+// Текущие размеры canvas: обновляются через initGuides/resizeGuides,
+// чтобы перетаскивание всегда работало по всей актуальной ширине/высоте
+const canvasSize = { width: 1000, height: 600 };
+
 export function getGuidesVisibility() {
   return { ...visibility };
 }
@@ -25,8 +29,10 @@ export function setGuideVisible(key, value) {
 }
 
 export function initGuides(draw, size = {}) {
-  const width = size.width ?? 1000;
-  const height = size.height ?? 600;
+  const width = size.width ?? canvasSize.width;
+  const height = size.height ?? canvasSize.height;
+  canvasSize.width = width;
+  canvasSize.height = height;
 
   // Если canvas был очищен (новый файл) — убираем старую группу, если она жива
   if (elements) {
@@ -82,13 +88,13 @@ export function initGuides(draw, size = {}) {
     };
 
     const updatePosition = (p) => {
-      // Не выпускаем направляющую за пределы svg canvas
-      position = Math.min(Math.max(p, 0), vertical ? width : height);
+      // Не выпускаем направляющую за пределы svg canvas (актуальные размеры)
+      position = Math.min(Math.max(p, 0), vertical ? canvasSize.width : canvasSize.height);
       if (vertical) {
-        core.plot(position, 0, position, height);
+        core.plot(position, 0, position, canvasSize.height);
         hit.x(position - HIT_THICKNESS / 2);
       } else {
-        core.plot(0, position, width, position);
+        core.plot(0, position, canvasSize.width, position);
         hit.y(position - HIT_THICKNESS / 2);
       }
     };
@@ -132,6 +138,11 @@ export function resizeGuides(width, height) {
   const w = Number(width) || 0;
   const h = Number(height) || 0;
   if (w <= 0 || h <= 0) return;
+
+  // обновляем общее состояние размеров: от него зависят
+  // и перетаскивание, и рисование линий
+  canvasSize.width = w;
+  canvasSize.height = h;
 
   const clampPos = (p, max) => Math.min(Math.max(p, 0), max);
 

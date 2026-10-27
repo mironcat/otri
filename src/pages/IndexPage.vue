@@ -775,6 +775,8 @@ onMounted(() => {
   concave_lso.addMeasureObjects().updateMeasures();
   initGuides(draw);
   initMagnifier(draw);
+  // направляющие создаются с дефолтным размером — сразу тянем на актуальный канвас
+  sizeCanvasToContainer();
   bus.emit("lateral-show", om.value.lateral_side & !om.value.concave_vs);
   bus.emit("concave-vs", om.value.lateral_side & om.value.concave_vs);
   bus.emit("dorsal-show", om.value.dorsal_side);
