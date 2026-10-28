@@ -627,7 +627,7 @@ const rows = ref({
 import { watch, inject } from "vue";
 import { exportFile } from "quasar";
 import "@svgdotjs/svg.draggable.js";
-import { Matrix } from "@svgdotjs/svg.js";
+import { Matrix, Point } from "@svgdotjs/svg.js";
 import { onMounted, onBeforeUnmount, ref } from "vue";
 // import { lineTolineIntersectionPoint, getLengthByCoordinates, getAnglePoints } from 'src/scripts/utils.js'
 import { initScalebar, getScalebarLength } from "src/scripts/scalebar.js";
@@ -671,7 +671,8 @@ const om = ref({
   settings: {
     image_lock: false,
     scalebar_ready: false,
-    pinToImage: false,
+    // независимые замки следования для рамок Left и Dorsal
+    pinToImage: { left: false, dorsal: false },
   },
 });
 const scales = ref({
@@ -679,11 +680,32 @@ const scales = ref({
   factor: 1,
   zoom: 1,
 });
+
+// Тонкая серая рамка по границам картинки — показывает область,
+// за которую её можно перетаскивать. Обводка не утолщается при зуме.
+const addImageFrame = (group, img) => {
+  const x = Number(img.attr("x")) || 0;
+  const y = Number(img.attr("y")) || 0;
+  const width = Number(img.attr("width")) || 0;
+  const height = Number(img.attr("height")) || 0;
+  const frame = draw
+    .rect(width, height)
+    .move(x, y)
+    .fill("none")
+    .stroke({ color: "gray", width: 1 })
+    .attr({ "vector-effect": "non-scaling-stroke" });
+  group.add(frame);
+  return frame;
+};
+
 let mainimage = draw.group().attr({ id: "maig" }).draggable();
-mainimage.add(
-  draw.image("ost1.jpg").attr("id", "mainimage").size(400, 400).move(300, 100)
-);
-// mainimage.add(draw.rect(400, 400).stroke('gray').fill({ opacity: 0 }).stroke({ dasharray: "2,100" }).move(300, 100))
+const initialImage = draw
+  .image("ost1.jpg")
+  .attr("id", "mainimage")
+  .size(400, 400)
+  .move(300, 100);
+mainimage.add(initialImage);
+addImageFrame(mainimage, initialImage);
 // let scalebar = draw.group().attr({ id: 'scalebar' })
 let scalebar = draw.group().attr({ id: "scalebar" });
 // initScalebar(scalebar, draw, scales.value)
@@ -769,6 +791,7 @@ onMounted(() => {
   // console.log(canvasRef.value)
   // draw = initSVG(canvasRef.value)
   draw.addTo(canvasRef.value);
+  canvasRef.value.addEventListener("wheel", onWheelZoom, { passive: false });
   sizeCanvasToContainer();
   // Канвас занимает всю доступную ширину; при изменении размеров
   // контейнера (окно, drawer, dock) SVG подстраивается автоматически.
@@ -790,6 +813,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  if (canvasRef.value) {
+    canvasRef.value.removeEventListener("wheel", onWheelZoom);
+  }
   if (canvasResizeObserver) {
     canvasResizeObserver.disconnect();
     canvasResizeObserver = null;
@@ -905,10 +931,39 @@ const getFactor = () => {
     (getScalebarLength(scalebar, scales) * scales.value.zoom);
 };
 
-// Группы векторных оверлеев (точки, рамки, линии), которые должны
-// «следовать» за изображением при зуме
-const followGroups = () =>
-  [lso, dso, concave_lso].flatMap((o) => (o && o.mobjects ? [o.mobjects] : []));
+// Группы векторных оверлеев (точки, рамки, линии) с привязкой к рамке.
+// Left и Concave Left используют одну рамку Left, Dorsal — отдельную.
+const followTargets = () => [
+  { frame: "left", group: lso && lso.mobjects },
+  { frame: "left", group: concave_lso && concave_lso.mobjects },
+  { frame: "dorsal", group: dso && dso.mobjects },
+].filter((t) => t.group);
+
+const followGroups = () => followTargets().map((t) => t.group);
+
+// Только группы, у которых включён замок следования за картинкой
+const pinnedGroups = () =>
+  followTargets()
+    .filter((t) => om.value.settings.pinToImage[t.frame])
+    .map((t) => t.group);
+
+// Смещение в локальных координатах группы -> вектор в координатах холста.
+// Нужно, чтобы рамка и картинка двигались вместе даже после поворота/зума.
+// matrixify() не зависит от видимости элемента (в отличие от screenCTM).
+const localToScreenDelta = (group, dx, dy) => {
+  const m = group.matrixify();
+  const p0 = new Point(0, 0).transform(m);
+  const p1 = new Point(dx, dy).transform(m);
+  return { x: p1.x - p0.x, y: p1.y - p0.y };
+};
+
+// Сдвинуть группу на вектор холста, переведя его в её локальные координаты
+const moveGroupByScreenDelta = (group, sx, sy) => {
+  const inv = group.matrixify().inverse();
+  const p0 = new Point(0, 0).transform(inv);
+  const p1 = new Point(sx, sy).transform(inv);
+  group.dmove(p1.x - p0.x, p1.y - p0.y);
+};
 
 // Масштабирует оверлеи вместе с картинкой так, чтобы они остались
 // привязанными к тем же точкам изображения.
@@ -978,28 +1033,59 @@ const zoomOut = () => {
   getFactor();
 };
 
-// Поворот со следованием оверлеев при pinToImage
+// Зум колесом мыши над канвасом: один шаг 10% на «щелчок» колеса.
+// Дельта накапливается, чтобы трекпад с мелкими событиями не zoom-ил слишком быстро.
+let wheelDelta = 0;
+const WHEEL_STEP = 50;
+const onWheelZoom = (event) => {
+  event.preventDefault();
+  const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 100 : 1;
+  wheelDelta += event.deltaY * unit;
+  if (Math.abs(wheelDelta) < WHEEL_STEP) return;
+  if (wheelDelta < 0) zoomIn();
+  else zoomOut();
+  wheelDelta = 0;
+};
+
+// Поворот со следованием оверлеев при pinToImage (только для рамок с замком)
 const rotateImage = (angle) => {
   mainimage.rotate(angle);
-  if (!om.value.settings.pinToImage) return;
+  const groups = pinnedGroups();
+  if (!groups.length) return;
   const mimg = mainimage.matrixify();
   const b = mainimage.bbox();
   const C = new Matrix().rotate(angle, b.cx, b.cy);
   const G = mimg.clone().multiplyO(C).multiplyO(mimg.clone().inverseO());
-  followGroups().forEach((g) => {
+  groups.forEach((g) => {
     g.attr("transform", new Matrix(G).multiplyO(g.matrixify()));
   });
   // обновить иконку сброса поворота в модулях
   bus.emit("overlays-transformed");
 };
 
-// Если pinToImage = true, перетаскивание картинки сдвигает и оверлеи
+// Если у рамки включён замок, перетаскивание картинки сдвигает и её оверлеи
 const onImageDrag = function (event) {
-  if (!om.value.settings.pinToImage) return;
   const { dx, dy } = event.detail;
-  followGroups().forEach((g) => g.dmove(dx, dy));
+  const d = localToScreenDelta(mainimage, dx, dy);
+  pinnedGroups().forEach((g) => moveGroupByScreenDelta(g, d.x, d.y));
 };
 mainimage.on("dragmove", onImageDrag);
+
+// Перетаскивание внутри запертой рамки двигает её вместе с картинкой.
+// Саму рамку уже сдвинул svg.draggable, здесь двигаем изображение
+// и остальные рамки, у которых тоже включён замок.
+const onFrameDragged = ({ frame, group, dx, dy }) => {
+  if (!om.value.settings.pinToImage[frame]) return;
+  const d = localToScreenDelta(group, dx, dy);
+  moveGroupByScreenDelta(mainimage, d.x, d.y);
+  followTargets().forEach((t) => {
+    if (t.group === group) return;
+    if (om.value.settings.pinToImage[t.frame]) {
+      moveGroupByScreenDelta(t.group, d.x, d.y);
+    }
+  });
+};
+bus.on("frame-dragged", onFrameDragged);
 const addScaleBar = () => {
   om.value.settings.scalebar_ready = false;
   scalebar = initScalebar(scalebar, draw, scales.value);
@@ -1021,8 +1107,8 @@ const fileUploaded = (file) => {
   mainimage = draw.group().attr({ id: "maig" }).draggable();
   const img = draw.image(file.path).attr("id", "mainimage").size(400, 400);
   mainimage.add(img.move(300, 100));
+  addImageFrame(mainimage, img);
   mainimage.on("dragmove", onImageDrag);
-  // mainimage.add(draw.rect(400, 400).stroke('blue').fill({ opacity: 0 }).stroke({ dasharray: "1,5" }).move(300, 100))
   addScaleBar();
   lso = leftSideObjects(draw, om, scales, bus);
   dso = DorsalSideObjects(draw, om, scales, bus);

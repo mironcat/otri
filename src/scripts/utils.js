@@ -192,12 +192,22 @@ function constrainVerticalPointMovement(
 
 /**
  * Полупрозрачная иконка замочка в центре baseFrame.
- * Клик переключает om.settings.pinToImage — когда замок закрыт,
- * точки следуют за перемещением изображения.
+ * Клик переключает om.settings.pinToImage[frameKey] — когда замок закрыт,
+ * точки этой рамки следуют за перемещением изображения. Рамки Left и Dorsal
+ * переключаются независимо (frameKey: "left" | "dorsal").
  */
-function addLockToggle(draw, mobjects, baseFrame, om, bus) {
+function addLockToggle(
+  draw,
+  mobjects,
+  baseFrame,
+  om,
+  bus,
+  frameResizer,
+  frameKey,
+) {
   const SIZE = 28;
   const SPACE = SIZE; // расстояние между центрами иконок
+  const isPinned = () => Boolean(om.value.settings.pinToImage?.[frameKey]);
 
   // текстовая подпись над иконками — om.label или "not scaled"
   const labelEl = draw
@@ -220,8 +230,15 @@ function addLockToggle(draw, mobjects, baseFrame, om, bus) {
   const updateIcon = (locked) => {
     icon.textContent = locked ? "lock" : "lock_open";
   };
-  updateIcon(om.value.settings.pinToImage);
+  updateIcon(isPinned());
   fo.node.appendChild(icon);
+
+  // при включённом следовании за картинкой ручку размера отключаем;
+  // сама рамка остаётся перетаскиваемой — её dragmove двигает картинку
+  const applyPinState = (pinned) => {
+    mobjects.draggable(true);
+    if (frameResizer) frameResizer.draggable(!pinned);
+  };
 
   // иконка сброса поворота (refresh) — появляется справа от замочка,
   // когда рамка повёрнута; клик возвращает в горизонталь + размыкает замок
@@ -269,14 +286,15 @@ function addLockToggle(draw, mobjects, baseFrame, om, bus) {
     resetFo.node.style.pointerEvents = visible ? "auto" : "none";
   };
   position();
+  applyPinState(isPinned());
 
   // клик по замочку — переключение следования за картинкой
   icon.addEventListener("click", (e) => {
     e.stopPropagation();
-    const v = !om.value.settings.pinToImage;
-    om.value.settings.pinToImage = v;
+    const v = !isPinned();
+    om.value.settings.pinToImage[frameKey] = v;
     updateIcon(v);
-    bus.emit("pin-image-toggled", v);
+    bus.emit("pin-image-toggled", { frame: frameKey, value: v });
   });
   icon.addEventListener("mousedown", (e) => e.stopPropagation());
   icon.addEventListener("mouseenter", () => { icon.style.opacity = "0.85"; });
@@ -293,19 +311,32 @@ function addLockToggle(draw, mobjects, baseFrame, om, bus) {
       mobjects.transform(M.clone().rotate(-(angle * 180) / Math.PI, b.cx, b.cy));
     }
     // размыкаем замок
-    om.value.settings.pinToImage = false;
+    om.value.settings.pinToImage[frameKey] = false;
     updateIcon(false);
     resetFo.attr("opacity", "0");
     resetFo.node.style.pointerEvents = "none";
-    bus.emit("pin-image-toggled", false);
+    bus.emit("pin-image-toggled", { frame: frameKey, value: false });
   });
   resetIcon.addEventListener("mousedown", (e) => e.stopPropagation());
   resetIcon.addEventListener("mouseenter", () => { resetIcon.style.opacity = "0.85"; });
   resetIcon.addEventListener("mouseleave", () => { resetIcon.style.opacity = "1"; });
 
-  // синхронизация из других мест (другой модуль)
-  bus.on("pin-image-toggled", (v) => {
-    updateIcon(v);
+  // При замке перетаскивание внутри рамки двигает её вместе с картинкой:
+  // рамку уже сдвигает svg.draggable, а IndexPage по этому событию
+  // двигает изображение и остальные рамки с включённым замком.
+  mobjects.on("dragmove", (event) => {
+    if (!isPinned()) return;
+    const { dx, dy } = event.detail;
+    if (!dx && !dy) return;
+    bus.emit("frame-dragged", { frame: frameKey, group: mobjects, dx, dy });
+  });
+
+  // синхронизация из других мест (другой модуль с тем же frameKey,
+  // например Left и Concave Left)
+  bus.on("pin-image-toggled", ({ frame, value }) => {
+    if (frame !== frameKey) return;
+    updateIcon(value);
+    applyPinState(value);
   });
   // после программного поворота оверлеев (rotateImage) обновляем
   // позицию + видимость иконки сброса

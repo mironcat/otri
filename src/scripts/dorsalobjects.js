@@ -635,7 +635,15 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
   // применить текущие множители размеров (точки/линии) — только r и stroke-width
   applyScales(mobjects);
   // полупрозрачный замочек в центре рамки (toggle следования за картинкой)
-  const lockIcon = addLockToggle(draw, mobjects, baseFrame, om, bus);
+  const lockIcon = addLockToggle(
+    draw,
+    mobjects,
+    baseFrame,
+    om,
+    bus,
+    frameResizer,
+    "dorsal",
+  );
   return {
     addMeasureObjects,
     updateMeasures,

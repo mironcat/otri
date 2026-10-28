@@ -666,7 +666,15 @@ export default function leftSideObjects(draw, om, scales, bus) {
     );
   }
   // полупрозрачный замочек в центре рамки (toggle следования за картинкой)
-  const lockIcon = addLockToggle(draw, mobjects, baseFrame, om, bus);
+  const lockIcon = addLockToggle(
+    draw,
+    mobjects,
+    baseFrame,
+    om,
+    bus,
+    frameResizer,
+    "left",
+  );
   // применить текущие множители размеров (точки/линии) — только r и stroke-width
   applyScales(mobjects);
   return {
