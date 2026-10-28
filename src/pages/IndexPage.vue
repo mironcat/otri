@@ -750,7 +750,11 @@ const syncOverlays = (active, target) => {
       y: active.frameResizer.attr("y"),
     });
   }
-  // пересчитать зависимую геометрию (линии к углам, кресты, меры)
+  // пересчитать зависимую геометрию (линии к углам, кресты, меры).
+  // Точки, отличающиеся между режимами, возвращаем в позиции
+  // по умолчанию относительно только что скопированной рамки —
+  // так же, как это делает resize рамки.
+  if (target.resetModePoints) target.resetModePoints();
   target.refreshPoints();
 };
 
@@ -987,6 +991,8 @@ const followZoom = (factor) => {
     g.attr("transform", M);
     keepVisualSizes(g, factor);
   });
+  // пересчитать позиции и компенсацию размера иконок (замок/refresh)
+  bus.emit("overlays-transformed");
 };
 
 // Держим визуальные размеры элементов постоянными на экране:
@@ -1012,11 +1018,9 @@ const keepVisualSizes = (g, s) => {
   // большой rect (baseFrame) не трогаем — это область измерения,
   // её углы должны оставаться привязанными к точкам изображения
   g.find("rect").forEach((r) => {
-    const w = r.attr("width");
-    if (w && w <= 24) {
-      r.attr("width", w / s);
-      r.attr("height", r.attr("height") / s);
-    }
+    if (!r.hasClass("ui-resizer")) return;
+    r.attr("width", r.attr("width") / s);
+    r.attr("height", r.attr("height") / s);
   });
 };
 

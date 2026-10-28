@@ -95,6 +95,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
     .rect(15, 15)
     .fill({ color: "darkblue" })
     .move(moDat.bFwidth, moDat.bFheight)
+    .addClass("ui-resizer")
     .draggable();
   // PMC points
   const createPMCpoint = (x, y) =>
@@ -749,6 +750,21 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
       vTangentPoint,
     ].forEach((p) => p.fire("dragmove"));
   }
+  // Точки, которых нет в обычном Left-режиме: при переключении режима
+  // ставим их в позиции по умолчанию, как при resize рамки.
+  function resetModePoints() {
+    const b = baseFrame.attr(["x", "y", "width", "height"]);
+    const x = Number(b.x);
+    const y = Number(b.y);
+    const w = Number(b.width);
+    const h = Number(b.height);
+    avPMC.attr({ cx: x + w / 4, cy: y + h });
+    pvPMC.attr({ cx: x + (w / 4) * 3, cy: y + h });
+    vTangentPoint.attr({
+      cx: x + w / 2,
+      cy: y + h - h * pMargin * 0.5,
+    });
+  }
   // применить текущие множители размеров (точки/линии) — только r и stroke-width
   applyScales(mobjects);
   // полупрозрачный замочек в центре рамки (toggle следования за картинкой)
@@ -783,5 +799,6 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
     baseFrame,
     frameResizer,
     refreshPoints,
+    resetModePoints,
   };
 }

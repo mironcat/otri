@@ -80,6 +80,7 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
     .rect(15, 15)
     .fill({ color: "darkgreen" })
     .move(moDat.bFwidth, moDat.bFheight)
+    .addClass("ui-resizer")
     .draggable();
   // PMC points
   const createPMCpoint = (x, y) =>

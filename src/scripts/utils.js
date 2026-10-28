@@ -206,18 +206,22 @@ function addLockToggle(
   frameKey,
 ) {
   const SIZE = 28;
-  const SPACE = SIZE; // расстояние между центрами иконок
   const isPinned = () => Boolean(om.value.settings.pinToImage?.[frameKey]);
 
-  // текстовая подпись над иконками — om.label или "not scaled"
+  // текстовая подпись над иконками — om.label или "not scaled".
+  // Вместо обводки текста используем полупрозрачную подложку:
+  // при компенсации зума обводка выглядела слишком толстой.
   const labelEl = draw
     .text("")
     .font({ size: 11, family: "Arial" })
     .fill("rgba(0,0,0,0.8)")
     .attr("text-anchor", "middle")
-    .attr("paint-order", "stroke fill")
-    .attr("stroke", "rgba(255,255,255,0.85)")
-    .attr("stroke-width", 1.5);
+    .attr("pointer-events", "none");
+
+  const labelBg = draw
+    .rect(0, 0)
+    .fill("#fff")
+    .attr({ "fill-opacity": 0.75, "pointer-events": "none" });
 
   // замочек
   const fo = draw.foreignObject(SIZE, SIZE);
@@ -252,40 +256,88 @@ function addLockToggle(
     "transition:opacity .2s;cursor:pointer;user-select:none;";
   resetFo.node.appendChild(resetIcon);
 
+  // подложка под текст: размеры пересчитываются после смены текста и зума,
+  // чтобы рамка оставалась постоянной на экране
+  const measureLabel = () => {
+    let bb = labelEl.bbox();
+    if (!bb.width || !bb.height) {
+      // скрытая группа не даёт getBBox; измеряем видимый клон в корне svg
+      const clone = labelEl.clone().addTo(draw);
+      bb = clone.bbox();
+      clone.remove();
+    }
+    return bb;
+  };
+  const layoutLabel = () => {
+    const visible = Boolean(labelEl.text());
+    labelEl.attr("opacity", visible ? "1" : "0");
+    labelBg.attr("opacity", visible ? "1" : "0");
+    if (!visible) return;
+    const M = mobjects.matrixify();
+    const scale = Math.hypot(M.a, M.b) || 1;
+    const pad = 3 / scale;
+    const bb = measureLabel();
+    labelBg.attr({
+      x: bb.x - pad,
+      y: bb.y - pad,
+      width: bb.width + pad * 2,
+      height: bb.height + pad * 2,
+    });
+  };
+
   // подписка на обновление метки извне
   const updateLabel = () => {
     const txt = om.value.settings.scalebar_ready
       ? (om.value.label || "")
       : "not scaled";
     labelEl.text(txt);
-    labelEl.attr("opacity", txt ? "1" : "0");
+    layoutLabel();
   };
   bus.on("label-changed", updateLabel);
   bus.on("measure-updated", updateLabel);
-  updateLabel();
 
   // текущая позиция + видимость иконки сброса
   const position = () => {
     const f = baseFrame.attr(["x", "y", "width", "height"]);
     const cx = Number(f.x) + Number(f.width) / 2;
     const cy = Number(f.y) + Number(f.height) / 2;
+
+    // Группа масштабируется при зуме; иконки компенсируем обратным
+    // масштабом, чтобы их размер не зависел от зума.
+    const M = mobjects.matrixify();
+    const scale = Math.hypot(M.a, M.b) || 1;
+    const inv = 1 / scale;
+    const w = SIZE * inv;
+    const h = SIZE * inv;
+
     // замочек левее центра, иконка сброса правее
-    fo.move(cx - SPACE, cy - SIZE / 2);
-    resetFo.move(cx, cy - SIZE / 2);
+    fo.attr({
+      x: 0,
+      y: 0,
+      width: SIZE,
+      height: SIZE,
+      transform: `translate(${cx - w} ${cy - h / 2}) scale(${inv})`,
+    });
+    resetFo.attr({
+      x: 0,
+      y: 0,
+      width: SIZE,
+      height: SIZE,
+      transform: `translate(${cx} ${cy - h / 2}) scale(${inv})`,
+    });
 
     // текстовая подпись — центрирована над замочком
-    labelEl.attr("x", cx - SPACE + SIZE / 2);
-    labelEl.attr("y", cy - SIZE / 2 - 4);
+    labelEl.attr("x", cx - w / 2);
+    labelEl.attr("y", cy - h / 2 - 4 * inv);
+    layoutLabel();
 
     // показать refresh, только если группа реально повёрнута
-    const M = mobjects.matrixify();
     const angle = Math.atan2(M.b, M.a);
     const rotated = Math.abs(angle) > 0.005;
     const visible = rotated;
     resetFo.attr("opacity", visible ? "1" : "0");
     resetFo.node.style.pointerEvents = visible ? "auto" : "none";
   };
-  position();
   applyPinState(isPinned());
 
   // клик по замочку — переключение следования за картинкой
@@ -342,7 +394,9 @@ function addLockToggle(
   // позицию + видимость иконки сброса
   bus.on("overlays-transformed", () => position());
 
-  mobjects.add(fo).add(resetFo).add(labelEl);
+  mobjects.add(fo).add(resetFo).add(labelBg).add(labelEl);
+  updateLabel();
+  position();
 
   return { field: fo, resetField: resetFo, position };
 }
