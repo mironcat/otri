@@ -190,6 +190,132 @@ function constrainVerticalPointMovement(
   updateMeasures();
 }
 
+/**
+ * Полупрозрачная иконка замочка в центре baseFrame.
+ * Клик переключает om.settings.pinToImage — когда замок закрыт,
+ * точки следуют за перемещением изображения.
+ */
+function addLockToggle(draw, mobjects, baseFrame, om, bus) {
+  const SIZE = 28;
+  const SPACE = SIZE; // расстояние между центрами иконок
+
+  // текстовая подпись над иконками — om.label или "not scaled"
+  const labelEl = draw
+    .text("")
+    .font({ size: 11, family: "Arial" })
+    .fill("rgba(0,0,0,0.8)")
+    .attr("text-anchor", "middle")
+    .attr("paint-order", "stroke fill")
+    .attr("stroke", "rgba(255,255,255,0.85)")
+    .attr("stroke-width", 1.5);
+
+  // замочек
+  const fo = draw.foreignObject(SIZE, SIZE);
+  const icon = document.createElement("i");
+  icon.className = "material-icons";
+  icon.style.cssText =
+    "font-size:20px;line-height:28px;display:block;text-align:center;" +
+    "color:#555;text-shadow:0 0 4px rgba(255,255,255,0.9);opacity:0.55;" +
+    "transition:opacity .2s;cursor:pointer;user-select:none;";
+  const updateIcon = (locked) => {
+    icon.textContent = locked ? "lock" : "lock_open";
+  };
+  updateIcon(om.value.settings.pinToImage);
+  fo.node.appendChild(icon);
+
+  // иконка сброса поворота (refresh) — появляется справа от замочка,
+  // когда рамка повёрнута; клик возвращает в горизонталь + размыкает замок
+  const resetFo = draw.foreignObject(SIZE, SIZE);
+  const resetIcon = document.createElement("i");
+  resetIcon.className = "material-icons";
+  resetIcon.textContent = "refresh";
+  resetIcon.style.cssText =
+    "font-size:20px;line-height:28px;display:block;text-align:center;" +
+    "color:#555;text-shadow:0 0 4px rgba(255,255,255,0.9);opacity:1;" +
+    "transition:opacity .2s;cursor:pointer;user-select:none;";
+  resetFo.node.appendChild(resetIcon);
+
+  // подписка на обновление метки извне
+  const updateLabel = () => {
+    const txt = om.value.settings.scalebar_ready
+      ? (om.value.label || "")
+      : "not scaled";
+    labelEl.text(txt);
+    labelEl.attr("opacity", txt ? "1" : "0");
+  };
+  bus.on("label-changed", updateLabel);
+  bus.on("measure-updated", updateLabel);
+  updateLabel();
+
+  // текущая позиция + видимость иконки сброса
+  const position = () => {
+    const f = baseFrame.attr(["x", "y", "width", "height"]);
+    const cx = Number(f.x) + Number(f.width) / 2;
+    const cy = Number(f.y) + Number(f.height) / 2;
+    // замочек левее центра, иконка сброса правее
+    fo.move(cx - SPACE, cy - SIZE / 2);
+    resetFo.move(cx, cy - SIZE / 2);
+
+    // текстовая подпись — центрирована над замочком
+    labelEl.attr("x", cx - SPACE + SIZE / 2);
+    labelEl.attr("y", cy - SIZE / 2 - 4);
+
+    // показать refresh, только если группа реально повёрнута
+    const M = mobjects.matrixify();
+    const angle = Math.atan2(M.b, M.a);
+    const rotated = Math.abs(angle) > 0.005;
+    const visible = rotated;
+    resetFo.attr("opacity", visible ? "1" : "0");
+    resetFo.node.style.pointerEvents = visible ? "auto" : "none";
+  };
+  position();
+
+  // клик по замочку — переключение следования за картинкой
+  icon.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const v = !om.value.settings.pinToImage;
+    om.value.settings.pinToImage = v;
+    updateIcon(v);
+    bus.emit("pin-image-toggled", v);
+  });
+  icon.addEventListener("mousedown", (e) => e.stopPropagation());
+  icon.addEventListener("mouseenter", () => { icon.style.opacity = "0.85"; });
+  icon.addEventListener("mouseleave", () => { icon.style.opacity = "0.55"; });
+
+  // клик по refresh — сброс поворота + размыкание замка
+  resetIcon.addEventListener("click", (e) => {
+    e.stopPropagation();
+    // сброс поворота (как двойной клик по рамке)
+    const M = mobjects.matrixify();
+    const angle = Math.atan2(M.b, M.a);
+    if (Math.abs(angle) > 0.005) {
+      const b = mobjects.bbox();
+      mobjects.transform(M.clone().rotate(-(angle * 180) / Math.PI, b.cx, b.cy));
+    }
+    // размыкаем замок
+    om.value.settings.pinToImage = false;
+    updateIcon(false);
+    resetFo.attr("opacity", "0");
+    resetFo.node.style.pointerEvents = "none";
+    bus.emit("pin-image-toggled", false);
+  });
+  resetIcon.addEventListener("mousedown", (e) => e.stopPropagation());
+  resetIcon.addEventListener("mouseenter", () => { resetIcon.style.opacity = "0.85"; });
+  resetIcon.addEventListener("mouseleave", () => { resetIcon.style.opacity = "1"; });
+
+  // синхронизация из других мест (другой модуль)
+  bus.on("pin-image-toggled", (v) => {
+    updateIcon(v);
+  });
+  // после программного поворота оверлеев (rotateImage) обновляем
+  // позицию + видимость иконки сброса
+  bus.on("overlays-transformed", () => position());
+
+  mobjects.add(fo).add(resetFo).add(labelEl);
+
+  return { field: fo, resetField: resetFo, position };
+}
+
 export {
   lineTolineIntersectionPoint,
   getAngleBetweenPoints,
@@ -199,4 +325,5 @@ export {
   getLineFromAnglePoint,
   constrainPointMovement,
   constrainVerticalPointMovement,
+  addLockToggle,
 };

@@ -6,12 +6,12 @@
         <q-btn color="secondary" @click="zoomOut" icon="zoom_out" />
         <q-btn
           color="secondary"
-          @click="mainimage.rotate(-0.5)"
+          @click="rotateImage(-0.5)"
           icon="rotate_left"
         />
         <q-btn
           color="secondary"
-          @click="mainimage.rotate(0.5)"
+          @click="rotateImage(0.5)"
           icon="rotate_right"
         />
         <q-btn
@@ -671,6 +671,7 @@ const om = ref({
   settings: {
     image_lock: false,
     scalebar_ready: false,
+    pinToImage: false,
   },
 });
 const scales = ref({
@@ -737,6 +738,11 @@ watch(
     if (om.value.concave_vs) syncOverlays(lso, concave_lso);
     else syncOverlays(concave_lso, lso);
   },
+);
+
+watch(
+  () => om.value.label,
+  () => bus.emit("label-changed"),
 );
 
 // --- Управление визуальными размерами точек и линий -------------------------
@@ -971,6 +977,29 @@ const zoomOut = () => {
   scales.value.zoom = scales.value.zoom * 0.9;
   getFactor();
 };
+
+// Поворот со следованием оверлеев при pinToImage
+const rotateImage = (angle) => {
+  mainimage.rotate(angle);
+  if (!om.value.settings.pinToImage) return;
+  const mimg = mainimage.matrixify();
+  const b = mainimage.bbox();
+  const C = new Matrix().rotate(angle, b.cx, b.cy);
+  const G = mimg.clone().multiplyO(C).multiplyO(mimg.clone().inverseO());
+  followGroups().forEach((g) => {
+    g.attr("transform", new Matrix(G).multiplyO(g.matrixify()));
+  });
+  // обновить иконку сброса поворота в модулях
+  bus.emit("overlays-transformed");
+};
+
+// Если pinToImage = true, перетаскивание картинки сдвигает и оверлеи
+const onImageDrag = function (event) {
+  if (!om.value.settings.pinToImage) return;
+  const { dx, dy } = event.detail;
+  followGroups().forEach((g) => g.dmove(dx, dy));
+};
+mainimage.on("dragmove", onImageDrag);
 const addScaleBar = () => {
   om.value.settings.scalebar_ready = false;
   scalebar = initScalebar(scalebar, draw, scales.value);
@@ -992,6 +1021,7 @@ const fileUploaded = (file) => {
   mainimage = draw.group().attr({ id: "maig" }).draggable();
   const img = draw.image(file.path).attr("id", "mainimage").size(400, 400);
   mainimage.add(img.move(300, 100));
+  mainimage.on("dragmove", onImageDrag);
   // mainimage.add(draw.rect(400, 400).stroke('blue').fill({ opacity: 0 }).stroke({ dasharray: "1,5" }).move(300, 100))
   addScaleBar();
   lso = leftSideObjects(draw, om, scales, bus);

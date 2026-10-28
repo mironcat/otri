@@ -20,6 +20,7 @@ import {
   addMouseOverToPoint,
   getLineFromAnglePoint,
   constrainPointMovement,
+  addLockToggle,
 } from "src/scripts/utils.js";
 import { applyScales, getLineScale } from "src/scripts/geostyle.js";
 export default function DorsalSideObjects(draw, om, scales, bus) {
@@ -51,6 +52,30 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
     .rect(moDat.bFwidth, moDat.bFheight)
     .stroke({ color: "gray", width: 1 })
     .fill({ color: "green", opacity: 0.02 });
+
+  // двойной клик по рамке — возвращаем группу в горизонтальное положение
+  // (mousedown + таймштамп, т.к. dblclick не доходит из-за svg.draggable)
+  {
+    let last = 0;
+    baseFrame.node.addEventListener("mousedown", function (e) {
+      const now = Date.now();
+      if (now - last < 350) {
+        e.stopPropagation();
+        const M = mobjects.matrixify();
+        const angle = Math.atan2(M.b, M.a);
+        if (Math.abs(angle) > 0.005) {
+          const b = mobjects.bbox();
+          mobjects.transform(
+            M.clone().rotate(-(angle * 180) / Math.PI, b.cx, b.cy),
+          );
+        }
+        last = 0;
+        return;
+      }
+      last = now;
+    });
+  }
+
   const frameResizer = draw
     .rect(15, 15)
     .fill({ color: "darkgreen" })
@@ -476,6 +501,7 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
     ]);
   }
   function updateMeasures() {
+    lockIcon.position();
     updateAdditionalObjects();
     om.value.length_dorsal = baseFrame.attr("width") * scales.value.factor;
     om.value.width = baseFrame.attr("height") * scales.value.factor;
@@ -608,6 +634,8 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
   }
   // применить текущие множители размеров (точки/линии) — только r и stroke-width
   applyScales(mobjects);
+  // полупрозрачный замочек в центре рамки (toggle следования за картинкой)
+  const lockIcon = addLockToggle(draw, mobjects, baseFrame, om, bus);
   return {
     addMeasureObjects,
     updateMeasures,
