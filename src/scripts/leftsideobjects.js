@@ -78,7 +78,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
   }
 
   const sideLabel = draw
-    .text(om.value.side === "right" ? "flat right" : "flat left")
+    .text(om.value.side === "right" ? "правая сторона" : "левая сторона")
     .font({
       fill: "black",
       size: 14,
@@ -385,7 +385,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
   });
   bus.on("side-change", (sidecolor) => {
     baseFrame.attr({ stroke: sidecolor });
-    sideLabel.text(om.value.side === "right" ? "flat right" : "flat left");
+    sideLabel.text(om.value.side === "right" ? "правая сторона" : "левая сторона");
     updateMeasures();
   });
   pdTangentPoint.on("dragmove.namespace", function (event) {

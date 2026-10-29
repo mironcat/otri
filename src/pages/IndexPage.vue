@@ -1,213 +1,105 @@
 <template>
-  <q-page>
+  <q-page class="column canvas-page">
     <div class="row q-ml-md q-mt-md">
       <div class="q-gutter-sm">
         <q-btn color="secondary" @click="zoomIn" icon="zoom_in" />
         <q-btn color="secondary" @click="zoomOut" icon="zoom_out" />
-        <q-btn
-          color="secondary"
-          @click="rotateImage(-0.5)"
-          icon="rotate_left"
-        />
-        <q-btn
-          color="secondary"
-          @click="rotateImage(0.5)"
-          icon="rotate_right"
-        />
-        <q-btn
-          v-show="!om.settings.image_lock"
-          color="secondary"
-          @click="
-            mainimage.draggable(false);
-            om.settings.image_lock = !om.settings.image_lock;
-          "
-          icon="lock_open"
-        />
-        <q-btn
-          v-show="om.settings.image_lock"
-          color="secondary"
-          @click="
-            mainimage.draggable(true);
-            om.settings.image_lock = !om.settings.image_lock;
-          "
-          icon="lock"
-        />
+        <q-btn color="secondary" @click="rotateImage(-0.5)" icon="rotate_left" />
+        <q-btn color="secondary" @click="rotateImage(0.5)" icon="rotate_right" />
+        <q-btn v-show="!om.settings.image_lock" color="secondary" @click="
+          mainimage.draggable(false);
+        om.settings.image_lock = !om.settings.image_lock;
+        " icon="lock_open" />
+        <q-btn v-show="om.settings.image_lock" color="secondary" @click="
+          mainimage.draggable(true);
+        om.settings.image_lock = !om.settings.image_lock;
+        " icon="lock" />
 
-        <q-checkbox
-          v-model="om.lateral_side"
-          @click="
-            bus.emit('lateral-show', om.lateral_side & !om.concave_vs);
-            bus.emit('concave-vs', om.lateral_side & om.concave_vs);
-          "
-          label="Lateral"
-          color="primary"
-        />
+        <q-checkbox v-model="om.lateral_side" @click="
+          bus.emit('lateral-show', om.lateral_side & !om.concave_vs);
+        bus.emit('concave-vs', om.lateral_side & om.concave_vs);
+        " label="Латеральная" color="primary" />
 
-        <q-radio
-          v-show="om.lateral_side"
-          v-model="om.side"
-          val="left"
-          label="Left"
-          @click="bus.emit('side-change', 'blue')"
-        />
-        <q-radio
-          v-show="om.lateral_side"
-          v-model="om.side"
-          val="right"
-          label="Right"
-          @click="bus.emit('side-change', 'gray')"
-        />
+        <q-radio v-show="om.lateral_side" v-model="om.side" val="left" label="Левая"
+          @click="bus.emit('side-change', 'blue')" />
+        <q-radio v-show="om.lateral_side" v-model="om.side" val="right" label="Правая"
+          @click="bus.emit('side-change', 'gray')" />
 
-        <q-toggle
-          v-show="om.lateral_side"
-          v-model="om.concave_vs"
-          label="Concave ventral margin"
-          @click="
-            bus.emit('concave-vs', om.concave_vs);
-            bus.emit('lateral-show', !om.concave_vs);
-          "
-        />
-        <q-checkbox
-          v-model="om.dorsal_side"
-          @click="bus.emit('dorsal-show', om.dorsal_side)"
-          label="Dorsal"
-          color="green"
-        />
-        <q-checkbox
-          v-show="om.dorsal_side"
-          v-model="om.half"
-          @click="om.half ? (om.fullness = 'half') : (om.fullness = 'full')"
-          label="Half"
-          color="black"
-        />
+        <q-toggle v-show="om.lateral_side" v-model="om.concave_vs" label="Вогнутый брюшной край" @click="
+          bus.emit('concave-vs', om.concave_vs);
+        bus.emit('lateral-show', !om.concave_vs);
+        " />
+        <q-checkbox v-model="om.dorsal_side" @click="bus.emit('dorsal-show', om.dorsal_side)" label="Дорсальная"
+          color="green" />
+        <q-checkbox v-show="om.dorsal_side" v-model="om.half"
+          @click="om.half ? (om.fullness = 'half') : (om.fullness = 'full')" label="Половина" color="black" />
       </div>
     </div>
-    <div class="row q-ma-md">
-      <div id="canvas" ref="canvasRef" class="col"></div>
+    <div class="row q-ma-md canvas-row">
+      <div id="canvas" ref="canvasRef"></div>
     </div>
     <div class="row q-ma-md q-gutter-sm flex items-center">
-      <q-file
-        bg-color="secondary"
-        dense
-        v-model="imagefile"
-        label="Pick one file"
-        filled
-        style="max-width: 400px"
-        @update:model-value="fileUploaded"
-      >
+      <q-file bg-color="secondary" dense v-model="imagefile" label="Выберите файл" filled style="max-width: 400px"
+        @update:model-value="fileUploaded">
         <template v-slot:prepend>
           <q-icon name="attach_file" />
         </template>
       </q-file>
-      <q-input
-        dense
-        v-model="scales.length"
-        label="Scalebar Length"
-        type="number"
-        filled
-        style="max-width: 150px"
-      />
+      <q-input dense v-model="scales.length" label="Длина масштабной линейки" type="number" filled
+        style="max-width: 150px" />
 
-      <q-btn color="primary" @click="setScaleBar" label="set scalebar" />
-      <q-input
-        v-show="om.settings.scalebar_ready"
-        dense
-        v-model="om.label"
-        filled
-        label="label"
-        style="max-width: 150px"
-        class="q-mr-sm"
-      />
-      <q-btn
-        v-show="om.settings.scalebar_ready"
-        icon="save"
-        color="primary"
-        @click="addRecord"
-        label="add record"
-        class="q-mr-sm"
-      />
-      <q-btn
-        v-show="rows.lateral.length > 0 || rows.dorsal.length > 0"
-        color="brown"
-        icon-right="archive"
-        label="Export to csv"
-        no-caps
-        @click="exportCombinedTable"
-      />
+      <q-btn color="primary" @click="setScaleBar" label="Задать масштаб" />
+      <q-input v-show="om.settings.scalebar_ready" dense v-model="om.label" filled label="Метка"
+        style="max-width: 150px" class="q-mr-sm" />
+      <q-btn v-show="om.settings.scalebar_ready" icon="save" color="primary" @click="addRecord"
+        label="Добавить запись" class="q-mr-sm" />
+      <q-btn v-show="rows.lateral.length > 0 || rows.dorsal.length > 0" color="brown" icon-right="archive"
+        label="Экспорт в CSV" no-caps @click="exportCombinedTable" />
+      <q-btn :color="showTables ? 'secondary' : 'primary'" :icon="showTables ? 'visibility_off' : 'visibility'"
+        :label="showTables ? 'Скрыть таблицы' : 'Показать таблицы'" no-caps class="q-ml-auto"
+        @click="showTables = !showTables">
+        <q-tooltip>{{ showTables ? 'Скрыть таблицы измерений' : 'Показать таблицы измерений' }}</q-tooltip>
+      </q-btn>
       <!-- <q-chip>{{ scales.factor }}</q-chip> -->
     </div>
-    <div class="row q-ma-md">
-      <div class="q-gutter-sm" style="width: 100%; overflow-x: auto">
-        <q-table
-          :rows="rows.lateral"
-          :columns="columns.lateral"
-          row-key="record_no"
-          no-data-label="no data"
-          style="min-width: 1500px"
-        >
-          <template v-slot:body-cell-action="props">
-            <q-td :props="props">
-              <q-btn
-                color="primary"
-                icon-right="delete"
-                no-caps
-                flat
-                dense
-                @click="deleteLateral(props.row)"
-              />
-            </q-td>
-          </template>
-          <template v-slot:top-left>
-            <q-btn
-              color="grey"
-              icon-right="archive"
-              label="Export to csv"
-              size="sm"
-              no-caps
-              @click="exportTable('lateral')"
-            />
-          </template>
-          <template v-slot:top-right><strong>Lateral(left)</strong></template>
-        </q-table>
+    <div v-show="showTables" class="tables-panel q-mx-md q-mb-md">
+      <div class="row">
+        <div class="q-gutter-sm" style="width: 100%; overflow-x: auto">
+          <q-table :rows="rows.lateral" :columns="columns.lateral" row-key="record_no" no-data-label="нет данных"
+            style="min-width: 1500px">
+            <template v-slot:body-cell-action="props">
+              <q-td :props="props">
+                <q-btn color="primary" icon-right="delete" no-caps flat dense @click="deleteLateral(props.row)" />
+              </q-td>
+            </template>
+            <template v-slot:top-left>
+              <q-btn color="grey" icon-right="archive" label="Экспорт в CSV" size="sm" no-caps
+                @click="exportTable('lateral')" />
+            </template>
+            <template v-slot:top-right><strong>Латеральная (левая)</strong></template>
+          </q-table>
+        </div>
       </div>
-    </div>
-    <div class="row q-ma-md">
-      <div class="q-gutter-sm" style="width: 100%; overflow-x: auto">
-        <q-table
-          :rows="rows.dorsal"
-          :columns="columns.dorsal"
-          row-key="record_no"
-          no-data-label="no data"
-          style="min-width: 1200px"
-        >
-          <template v-slot:body-cell-action="props">
-            <q-td :props="props">
-              <q-btn
-                color="primary"
-                icon-right="delete"
-                no-caps
-                flat
-                dense
-                @click="deleteDorsal(props.row)"
-              />
-            </q-td>
-          </template>
-          <template v-slot:top-left>
-            <!-- <q-input v-show="om.settings.scalebar_ready" dense v-model="om.label" filled label="label"
-              style="max-width: 150px" class="q-mr-sm" />
-            <q-btn v-show="om.settings.scalebar_ready" color="primary" @click="addRecord" label="add record"
-              class="q-mr-lg" /> -->
-            <q-btn
-              color="grey"
-              icon-right="archive"
-              label="Export to csv"
-              size="sm"
-              no-caps
-              @click="exportTable('dorsal')"
-            />
-          </template>
-          <template v-slot:top-right><strong>Dorsal</strong></template>
-        </q-table>
+      <div class="row q-mt-md">
+        <div class="q-gutter-sm" style="width: 100%; overflow-x: auto">
+          <q-table :rows="rows.dorsal" :columns="columns.dorsal" row-key="record_no" no-data-label="нет данных"
+            style="min-width: 1200px">
+            <template v-slot:body-cell-action="props">
+              <q-td :props="props">
+                <q-btn color="primary" icon-right="delete" no-caps flat dense @click="deleteDorsal(props.row)" />
+              </q-td>
+            </template>
+            <template v-slot:top-left>
+              <!-- <q-input v-show="om.settings.scalebar_ready" dense v-model="om.label" filled label="label"
+                style="max-width: 150px" class="q-mr-sm" />
+              <q-btn v-show="om.settings.scalebar_ready" color="primary" @click="addRecord" label="add record"
+                class="q-mr-lg" /> -->
+              <q-btn color="grey" icon-right="archive" label="Экспорт в CSV" size="sm" no-caps
+                @click="exportTable('dorsal')" />
+            </template>
+            <template v-slot:top-right><strong>Дорсальная</strong></template>
+          </q-table>
+        </div>
       </div>
     </div>
   </q-page>
@@ -233,19 +125,25 @@ function wrapCsvValue(val, formatFn, row) {
 // Вспомогательная функция для форматирования чисел
 const formatNumber = (val) =>
   val !== undefined && val !== null ? `${val.toFixed()}` : "";
+// Значения данных (left/right, full/half) остаются прежними —
+// переводим только их отображение в таблицах и CSV
+const formatSide = (val) =>
+  val === "right" ? "правая" : val === "left" ? "левая" : val;
+const formatFullness = (val) =>
+  val === "half" ? "половина" : val === "full" ? "полная" : val;
 const baseColumns = [
-  { name: "action", label: "Delete", field: "action" },
+  { name: "action", label: "Удалить", field: "action" },
   {
     name: "no",
     align: "center",
-    label: "No",
+    label: "№",
     field: "record_no",
     sortable: true,
   },
   {
     name: "filename",
     required: true,
-    label: "File Name",
+    label: "Имя файла",
     align: "left",
     field: "filename",
     // format: val => `File:${val}`,
@@ -254,7 +152,7 @@ const baseColumns = [
   {
     name: "label",
     align: "center",
-    label: "Label",
+    label: "Метка",
     field: "label",
     sortable: true,
   },
@@ -264,8 +162,9 @@ const lateralColumns = [
   {
     name: "side",
     align: "center",
-    label: "Side|Fullness",
+    label: "Сторона|Полнота",
     field: "side",
+    format: formatSide,
     sortable: true,
   },
   {
@@ -284,180 +183,181 @@ const lateralColumns = [
     sortable: true,
   },
   // AD измерения
-  {
-    name: "ad_alfa",
-    label: "AD-alfa",
-    field: "ad_alfa",
-    format: (val) =>
-      val !== undefined && val !== null ? `${val.toFixed()}` : "",
-    sortable: true,
-  },
-  {
-    name: "ad_hc",
-    label: "AD-l",
-    field: "ad_hc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "ad_vc",
-    label: "AD-h",
-    field: "ad_vc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "ad_ln",
-    label: "AD-n",
-    field: "ad_ln",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "ad_sln",
-    label: "AD-s",
-    field: "ad_sln",
-    format: formatNumber,
-    sortable: true,
-  },
+  // {
+  //   name: "ad_alfa",
+  //   label: "AD-alfa",
+  //   field: "ad_alfa",
+  //   format: (val) =>
+  //     val !== undefined && val !== null ? `${val.toFixed()}` : "",
+  //   sortable: true,
+  // },
+  // {
+  //   name: "ad_hc",
+  //   label: "AD-l",
+  //   field: "ad_hc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "ad_vc",
+  //   label: "AD-h",
+  //   field: "ad_vc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "ad_ln",
+  //   label: "AD-n",
+  //   field: "ad_ln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "ad_sln",
+  //   label: "AD-s",
+  //   field: "ad_sln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
   // PD измерения
-  {
-    name: "pd_alfa",
-    label: "PD-alfa",
-    field: "pd_alfa",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pd_hc",
-    label: "PD-l",
-    field: "pd_hc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pd_vc",
-    label: "PD-h",
-    field: "pd_vc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pd_ln",
-    label: "PD-n",
-    field: "pd_ln",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pd_sln",
-    label: "PD-s",
-    field: "pd_sln",
-    format: formatNumber,
-    sortable: true,
-  },
+  // {
+  //   name: "pd_alfa",
+  //   label: "PD-alfa",
+  //   field: "pd_alfa",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pd_hc",
+  //   label: "PD-l",
+  //   field: "pd_hc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pd_vc",
+  //   label: "PD-h",
+  //   field: "pd_vc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pd_ln",
+  //   label: "PD-n",
+  //   field: "pd_ln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pd_sln",
+  //   label: "PD-s",
+  //   field: "pd_sln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
   // AV измерения
-  {
-    name: "av_alfa",
-    label: "AV-alfa",
-    field: "av_alfa",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "av_hc",
-    label: "AV-l",
-    field: "av_hc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "av_vc",
-    label: "AV-h",
-    field: "av_vc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "av_ln",
-    label: "AV-n",
-    field: "av_ln",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "av_sln",
-    label: "AV-s",
-    field: "av_sln",
-    format: formatNumber,
-    sortable: true,
-  },
+  // {
+  //   name: "av_alfa",
+  //   label: "AV-alfa",
+  //   field: "av_alfa",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "av_hc",
+  //   label: "AV-l",
+  //   field: "av_hc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "av_vc",
+  //   label: "AV-h",
+  //   field: "av_vc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "av_ln",
+  //   label: "AV-n",
+  //   field: "av_ln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "av_sln",
+  //   label: "AV-s",
+  //   field: "av_sln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
   // PV измерения
-  {
-    name: "pv_alfa",
-    label: "PV-alfa",
-    field: "pv_alfa",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pv_hc",
-    label: "PV-l",
-    field: "pv_hc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pv_vc",
-    label: "PV-h",
-    field: "pv_vc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pv_ln",
-    label: "PV-n",
-    field: "pv_ln",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pv_sln",
-    label: "PV-s",
-    field: "pv_sln",
-    format: formatNumber,
-    sortable: true,
-  },
-  // V измерения
-  {
-    name: "v_lv",
-    label: "V-lv",
-    field: "v_lv",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "v_lvl",
-    label: "V-lvl",
-    field: "v_lvl",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "v_dv",
-    label: "V-dv",
-    field: "v_dv",
-    format: formatNumber,
-    sortable: true,
-  },
+  // {
+  //   name: "pv_alfa",
+  //   label: "PV-alfa",
+  //   field: "pv_alfa",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pv_hc",
+  //   label: "PV-l",
+  //   field: "pv_hc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pv_vc",
+  //   label: "PV-h",
+  //   field: "pv_vc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pv_ln",
+  //   label: "PV-n",
+  //   field: "pv_ln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pv_sln",
+  //   label: "PV-s",
+  //   field: "pv_sln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // // V измерения
+  // {
+  //   name: "v_lv",
+  //   label: "V-lv",
+  //   field: "v_lv",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "v_lvl",
+  //   label: "V-lvl",
+  //   field: "v_lvl",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "v_dv",
+  //   label: "V-dv",
+  //   field: "v_dv",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
 ];
 // ========== НОВЫЙ КОД DORSAL КОЛОНОК (разделенные поля) ==========
 const dorsalColumns = [
   {
     name: "side",
     align: "center",
-    label: "Side|Fullness",
+    label: "Сторона|Полнота",
     field: "fullness",
+    format: formatFullness,
     sortable: true,
   },
   {
@@ -468,149 +368,149 @@ const dorsalColumns = [
     sortable: true,
   },
   // AR измерения
-  {
-    name: "ar_alfa",
-    label: "AR-alfa",
-    field: "ar_alfa",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "ar_hc",
-    label: "AR-l",
-    field: "ar_hc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "ar_vc",
-    label: "AR-h",
-    field: "ar_vc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "ar_ln",
-    label: "AR-n",
-    field: "ar_ln",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "ar_sln",
-    label: "AR-s",
-    field: "ar_sln",
-    format: formatNumber,
-    sortable: true,
-  },
-  // PR измерения
-  {
-    name: "pr_alfa",
-    label: "PR-alfa",
-    field: "pr_alfa",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pr_hc",
-    label: "PR-l",
-    field: "pr_hc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pr_vc",
-    label: "PR-h",
-    field: "pr_vc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pr_ln",
-    label: "PR-n",
-    field: "pr_ln",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pr_sln",
-    label: "PR-s",
-    field: "pr_sln",
-    format: formatNumber,
-    sortable: true,
-  },
-  // AL измерения
-  {
-    name: "al_alfa",
-    label: "AL-alfa",
-    field: "al_alfa",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "al_hc",
-    label: "AL-l",
-    field: "al_hc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "al_vc",
-    label: "AL-h",
-    field: "al_vc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "al_ln",
-    label: "AL-n",
-    field: "al_ln",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "al_sln",
-    label: "AL-s",
-    field: "al_sln",
-    format: formatNumber,
-    sortable: true,
-  },
-  // PL измерения
-  {
-    name: "pl_alfa",
-    label: "PL-alfa",
-    field: "pl_alfa",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pl_hc",
-    label: "PL-l",
-    field: "pl_hc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pl_vc",
-    label: "PL-h",
-    field: "pl_vc",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pl_ln",
-    label: "PL-n",
-    field: "pl_ln",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "pl_sln",
-    label: "PL-s",
-    field: "pl_sln",
-    format: formatNumber,
-    sortable: true,
-  },
+  // {
+  //   name: "ar_alfa",
+  //   label: "AR-alfa",
+  //   field: "ar_alfa",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "ar_hc",
+  //   label: "AR-l",
+  //   field: "ar_hc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "ar_vc",
+  //   label: "AR-h",
+  //   field: "ar_vc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "ar_ln",
+  //   label: "AR-n",
+  //   field: "ar_ln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "ar_sln",
+  //   label: "AR-s",
+  //   field: "ar_sln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // // PR измерения
+  // {
+  //   name: "pr_alfa",
+  //   label: "PR-alfa",
+  //   field: "pr_alfa",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pr_hc",
+  //   label: "PR-l",
+  //   field: "pr_hc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pr_vc",
+  //   label: "PR-h",
+  //   field: "pr_vc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pr_ln",
+  //   label: "PR-n",
+  //   field: "pr_ln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pr_sln",
+  //   label: "PR-s",
+  //   field: "pr_sln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // // AL измерения
+  // {
+  //   name: "al_alfa",
+  //   label: "AL-alfa",
+  //   field: "al_alfa",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "al_hc",
+  //   label: "AL-l",
+  //   field: "al_hc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "al_vc",
+  //   label: "AL-h",
+  //   field: "al_vc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "al_ln",
+  //   label: "AL-n",
+  //   field: "al_ln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "al_sln",
+  //   label: "AL-s",
+  //   field: "al_sln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // // PL измерения
+  // {
+  //   name: "pl_alfa",
+  //   label: "PL-alfa",
+  //   field: "pl_alfa",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pl_hc",
+  //   label: "PL-l",
+  //   field: "pl_hc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pl_vc",
+  //   label: "PL-h",
+  //   field: "pl_vc",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pl_ln",
+  //   label: "PL-n",
+  //   field: "pl_ln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
+  // {
+  //   name: "pl_sln",
+  //   label: "PL-s",
+  //   field: "pl_sln",
+  //   format: formatNumber,
+  //   sortable: true,
+  // },
 ];
 
 const columns = ref({
@@ -623,6 +523,8 @@ const rows = ref({
   lateral: [],
   dorsal: [],
 });
+// Видимость таблиц с измерениями под canvas
+const showTables = ref(true);
 
 import { watch, inject } from "vue";
 import { exportFile } from "quasar";
@@ -646,7 +548,7 @@ let bus = inject("bus");
 let canvasResizeObserver = null;
 const om = ref({
   record_no: 0,
-  label: "no label",
+  label: "без метки",
   filename: "",
   side: "left",
   length: 0,
@@ -776,13 +678,14 @@ watch(
 // относительно предыдущих значений к группам всех трёх наборов.
 import { changeScales } from "src/scripts/geostyle.js";
 
-// Подгонка размеров SVG под контейнер: вся доступная ширина,
-// высота фиксированная (600, как и раньше).
+// Подгонка размеров SVG под контейнер: канвас растягивается на всё
+// свободное место (ширина и высота), оставшееся от панелей и таблиц.
 function sizeCanvasToContainer() {
   if (!canvasRef.value) return;
   const width = Math.max(canvasRef.value.clientWidth, 400);
-  draw.size(width, 600);
-  resizeGuides(width, 600);
+  const height = Math.max(canvasRef.value.clientHeight, 300);
+  draw.size(width, height);
+  resizeGuides(width, height);
 }
 
 bus.on("geo-style-changed", ({ prevPoint, prevLine }) => {
@@ -943,8 +846,6 @@ const followTargets = () => [
   { frame: "dorsal", group: dso && dso.mobjects },
 ].filter((t) => t.group);
 
-const followGroups = () => followTargets().map((t) => t.group);
-
 // Только группы, у которых включён замок следования за картинкой
 const pinnedGroups = () =>
   followTargets()
@@ -969,14 +870,16 @@ const moveGroupByScreenDelta = (group, sx, sy) => {
   group.dmove(p1.x - p0.x, p1.y - p0.y);
 };
 
-// Масштабирует оверлеи вместе с картинкой так, чтобы они остались
-// привязанными к тем же точкам изображения.
-// Картинка масштабируется svg.js вокруг локального центра её содержимого
-// (матрица C); оверлею нужно применить ту же трансформацию, сконъюгированную
-// матрицей картинки: G = M_img · C · M_img⁻¹. Работает при любом уже
-// применённом перетаскивании/повороте/зуме картинки.
+// Зум меняет масштаб только картинки. Оверлеи масштабируются вместе с ней
+// лишь при включённом замке; без замка они остаются на месте и не меняют
+// размер. Картинка масштабируется svg.js вокруг локального центра её
+// содержимого (матрица C); оверлею нужно применить ту же трансформацию,
+// сконъюгированную матрицей картинки: G = M_img · C · M_img⁻¹.
+// Работает при любом уже применённом перетаскивании/повороте/зуме картинки.
 const followZoom = (factor) => {
   if (factor === 1) return;
+  const groups = pinnedGroups();
+  if (!groups.length) return;
   const mimg = mainimage.matrixify();
   const b = mainimage.bbox(); // локальный бокс содержимого картинки
   const C = new Matrix().scaleO(
@@ -986,42 +889,12 @@ const followZoom = (factor) => {
     b.y + b.height / 2,
   );
   const G = mimg.clone().multiplyO(C).multiplyO(mimg.clone().inverseO());
-  followGroups().forEach((g) => {
+  groups.forEach((g) => {
     const M = new Matrix(G).multiplyO(g.matrixify());
     g.attr("transform", M);
-    keepVisualSizes(g, factor);
   });
-  // пересчитать позиции и компенсацию размера иконок (замок/refresh)
+  // пересчитать позицию и масштаб иконок (замок/refresh)
   bus.emit("overlays-transformed");
-};
-
-// Держим визуальные размеры элементов постоянными на экране:
-// меняется только их положение (групповая матрица G выше), а
-// радиусы точек, толщина линий и шрифты компенсируются.
-const keepVisualSizes = (g, s) => {
-  // обводки любой ширины: браузер сам компенсирует масштаб группы
-  g.find("line, polyline, rect, circle, text").forEach((el) =>
-    el.attr("vector-effect", "non-scaling-stroke"),
-  );
-  // радиусы точек: делим на масштаб текущего шага —
-  // визуальный радиус остаётся прежним (накопление учитывается автоматически)
-  g.find("circle").forEach((c) => {
-    const r = c.attr("r");
-    if (r) c.attr("r", r / s);
-  });
-  // текст
-  g.find("text").forEach((t) => {
-    const fs = t.attr("font-size");
-    if (fs) t.attr("font-size", fs / s);
-  });
-  // маленькие квадратные ручки (frameResizer ~15×15);
-  // большой rect (baseFrame) не трогаем — это область измерения,
-  // её углы должны оставаться привязанными к точкам изображения
-  g.find("rect").forEach((r) => {
-    if (!r.hasClass("ui-resizer")) return;
-    r.attr("width", r.attr("width") / s);
-    r.attr("height", r.attr("height") / s);
-  });
 };
 
 const zoomIn = () => {
@@ -1162,7 +1035,7 @@ const exportTable = (datatype) => {
 
   if (status !== true) {
     $q.notify({
-      message: "Browser denied file download...",
+      message: "Браузер запретил скачивание файла...",
       color: "negative",
       icon: "warning",
     });
@@ -1172,15 +1045,20 @@ const exportTable = (datatype) => {
 const combinedColumns = [
   {
     name: "no",
-    label: "No",
+    label: "№",
     field: "record_no",
     sortable: true,
     format: formatNumber,
   },
-  { name: "filename", label: "File Name", field: "filename", sortable: true },
-  { name: "label", label: "Label", field: "label", sortable: true },
-  { name: "side", label: "Side", field: "side" },
-  { name: "fullness", label: "Fullness", field: "fullness" },
+  { name: "filename", label: "Имя файла", field: "filename", sortable: true },
+  { name: "label", label: "Метка", field: "label", sortable: true },
+  { name: "side", label: "Сторона", field: "side", format: formatSide },
+  {
+    name: "fullness",
+    label: "Полнота",
+    field: "fullness",
+    format: formatFullness,
+  },
   { name: "length", label: "L", field: "length", format: formatNumber },
   { name: "height", label: "H", field: "height", format: formatNumber },
   { name: "width", label: "W", field: "width", format: formatNumber },
@@ -1273,7 +1151,7 @@ const exportCombinedTable = () => {
 
   if (status !== true) {
     $q.notify({
-      message: "Browser denied file download...",
+      message: "Браузер запретил скачивание файла...",
       color: "negative",
       icon: "warning",
     });
@@ -1284,10 +1162,43 @@ const exportCombinedTable = () => {
 image {
   border: 5px solid #ea0b0b;
 }
+
 #canvas svg {
+  display: block;
   border-style: solid;
   border-color: gray;
   border-width: thin;
+}
+
+/* Канвас занимает всё свободное место по высоте страницы.
+   Сама страница фиксирована по высоте вьюпорта и не скроллится,
+   поэтому скрытие/показ таблиц не может «раздуть» страницу. */
+.canvas-page {
+  overflow: hidden;
+}
+
+/* Ряд канваса не должен зависеть от размера SVG: иначе явная высота
+   svg через intrinsic size увеличивает страницу и появляются скроллбары */
+.canvas-row {
+  position: relative;
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Таблицы измерений под канвасом: ограниченная высота + прокрутка,
+   чтобы канвас всегда сохранял свободное место */
+.tables-panel {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 /* Стили для таблиц с горизонтальной прокруткой */

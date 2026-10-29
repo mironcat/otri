@@ -1,15 +1,15 @@
 <template>
   <q-list v-show="om.lateral_side" dense>
     <q-item-label header>
-      {{ om.side == "left" ? "Left" : "Right" }} side
+      {{ om.side == "left" ? "Левая" : "Правая" }} сторона
     </q-item-label>
     <q-item>
-      <strong class="q-mr-sm">Length:</strong> {{ om.length.toFixed(1) }}
-      <strong class="q-mx-sm">Height:</strong> {{ om.height.toFixed(1) }}
+      <strong class="q-mr-sm">Длина:</strong> {{ om.length.toFixed(1) }}
+      <strong class="q-mx-sm">Высота:</strong> {{ om.height.toFixed(1) }}
     </q-item>
 
     <q-item>
-      <strong class="q-mr-sm">Alfa:</strong> ad: {{ om.ad.alfa.toFixed() }}, av:
+      <strong class="q-mr-sm">Альфа:</strong> ad: {{ om.ad.alfa.toFixed() }}, av:
       {{ om.av.alfa.toFixed() }}, pv: {{ om.pv.alfa.toFixed() }}, pd:
       {{ om.pd.alfa.toFixed() }}
     </q-item>
@@ -42,15 +42,15 @@
   </q-list>
   <q-list v-show="om.dorsal_side" dense>
     <q-item-label header>
-      Dorsal side {{ om.half ? "(half)" : "" }}
+      Дорсальная сторона {{ om.half ? "(половина)" : "" }}
     </q-item-label>
     <q-item>
-      <strong class="q-mr-sm">Length(dorsal):</strong>
-      {{ om.length_dorsal.toFixed(1) }}<strong class="q-mx-sm">Width:</strong>
+      <strong class="q-mr-sm">Длина (дорсальная):</strong>
+      {{ om.length_dorsal.toFixed(1) }}<strong class="q-mx-sm">Ширина:</strong>
       {{ om.width.toFixed(1) }}
     </q-item>
     <q-item>
-      <strong class="q-mr-sm">Alfa:</strong> ar: {{ om.ar.alfa.toFixed() }},pr:
+      <strong class="q-mr-sm">Альфа:</strong> ar: {{ om.ar.alfa.toFixed() }},pr:
       {{ om.pr.alfa.toFixed() }},al: {{ om.al.alfa.toFixed() }},pl:
       {{ om.pl.alfa.toFixed() }}
     </q-item>
@@ -82,7 +82,7 @@ const bus = inject("bus");
 // import EssentialLink from 'components/EssentialLink.vue'
 const om = ref({
   record_no: 0,
-  label: "no label",
+  label: "без метки",
   filename: "",
   length: 0,
   length_dorsal: 0,

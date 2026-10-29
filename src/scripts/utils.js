@@ -208,7 +208,7 @@ function addLockToggle(
   const SIZE = 28;
   const isPinned = () => Boolean(om.value.settings.pinToImage?.[frameKey]);
 
-  // текстовая подпись над иконками — om.label или "not scaled".
+  // текстовая подпись над иконками — om.label или "масштаб не задан".
   // Вместо обводки текста используем полупрозрачную подложку:
   // при компенсации зума обводка выглядела слишком толстой.
   const labelEl = draw
@@ -275,7 +275,7 @@ function addLockToggle(
     if (!visible) return;
     const M = mobjects.matrixify();
     const scale = Math.hypot(M.a, M.b) || 1;
-    const pad = 3 / scale;
+    const pad = isPinned() ? 3 : 3 / scale;
     const bb = measureLabel();
     labelBg.attr({
       x: bb.x - pad,
@@ -289,7 +289,7 @@ function addLockToggle(
   const updateLabel = () => {
     const txt = om.value.settings.scalebar_ready
       ? (om.value.label || "")
-      : "not scaled";
+      : "масштаб не задан";
     labelEl.text(txt);
     layoutLabel();
   };
@@ -302,11 +302,12 @@ function addLockToggle(
     const cx = Number(f.x) + Number(f.width) / 2;
     const cy = Number(f.y) + Number(f.height) / 2;
 
-    // Группа масштабируется при зуме; иконки компенсируем обратным
-    // масштабом, чтобы их размер не зависел от зума.
+    // Группа масштабируется при зуме. Если замок включён (рамка привязана
+    // к картинке), иконки масштабируются вместе с ней. Если замок выключен,
+    // компенсируем масштаб обратным — размер на экране остаётся постоянным.
     const M = mobjects.matrixify();
     const scale = Math.hypot(M.a, M.b) || 1;
-    const inv = 1 / scale;
+    const inv = isPinned() ? 1 : 1 / scale;
     const w = SIZE * inv;
     const h = SIZE * inv;
 
@@ -347,6 +348,8 @@ function addLockToggle(
     om.value.settings.pinToImage[frameKey] = v;
     updateIcon(v);
     bus.emit("pin-image-toggled", { frame: frameKey, value: v });
+    // сразу пересчитать масштаб иконок под новое состояние замка
+    position();
   });
   icon.addEventListener("mousedown", (e) => e.stopPropagation());
   icon.addEventListener("mouseenter", () => { icon.style.opacity = "0.85"; });
@@ -389,6 +392,7 @@ function addLockToggle(
     if (frame !== frameKey) return;
     updateIcon(value);
     applyPinState(value);
+    position();
   });
   // после программного поворота оверлеев (rotateImage) обновляем
   // позицию + видимость иконки сброса

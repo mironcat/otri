@@ -84,7 +84,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   }
 
   const sideLabel = draw
-    .text(om.value.side === "right" ? "concave right" : "concave left")
+    .text(om.value.side === "right" ? "вогнутая правая" : "вогнутая левая")
     .font({
       fill: "black",
       size: 14,
@@ -413,7 +413,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   bus.on("side-change", (sidecolor) => {
     baseFrame.attr({ stroke: sidecolor });
     sideLabel.text(
-      om.value.side === "right" ? "concave right" : "concave left",
+      om.value.side === "right" ? "вогнутая правая" : "вогнутая левая",
     );
     updateMeasures();
   });
