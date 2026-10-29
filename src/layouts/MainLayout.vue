@@ -21,7 +21,8 @@
             aria-label="Toggle magnifier" @click="toggleMagnifier">
             <q-tooltip>Лупа при перетаскивании точек (клавиша Z)</q-tooltip>
           </q-btn>
-          <q-btn flat dense round icon="tune" :color="styleChanged ? 'pink-4' : 'grey-6'"
+
+          <!-- <q-btn flat dense round icon="tune" :color="styleChanged ? 'pink-4' : 'grey-6'"
             aria-label="Vector element sizes">
             <q-tooltip>Размер точек и линий</q-tooltip>
             <q-popup-proxy>
@@ -33,8 +34,16 @@
                   class="q-mt-sm" @update:model-value="onLineScale" />
               </q-card>
             </q-popup-proxy>
-          </q-btn>
+          </q-btn> -->
         </q-btn-group>
+
+        <q-input class="q-mx-lg" bg-color="white" dense filled type="number" v-model="pointScale" label="Точки"
+          :min="0.25" :max="4" :step="0.25" @update:model-value="onPointScale" />
+        <q-input class="q-mr-md" bg-color="white" dense filled type="number" v-model="lineScale" label="Линии"
+          :min="0.25" :max="4" :step="0.25" @update:model-value="onLineScale" />
+
+
+
         <div class="q-ml-auto"> Otri <small>v{{ version }}</small> </div>
       </q-toolbar>
     </q-header>

@@ -7,7 +7,7 @@ const CORE_COLOR = "#e91e63";
 
 // Состояние видимости хранится глобально, чтобы переживать
 // пересоздание canvas (draw.clear() при загрузке нового файла)
-const visibility = { h: true, v1: true, v2: true };
+const visibility = { h: false, v1: false, v2: false };
 
 // Ссылки на текущие элементы направляющих (реализации на текущем draw)
 let elements = null;
@@ -59,20 +59,16 @@ export function initGuides(draw, size = {}) {
     const core = vertical
       ? guide.line(position, 0, position, height)
       : guide.line(0, position, width, position);
-    core
-      .attr("pointer-events", "none")
-      .stroke({
-        color: CORE_COLOR,
-        width: 2,
-        dasharray: "0.1,7",
-        linecap: "round",
-      });
+    core.attr("pointer-events", "none").stroke({
+      color: CORE_COLOR,
+      width: 2,
+      dasharray: "0.1,7",
+      linecap: "round",
+    });
 
     // Прозрачная «толстая» полоса для удобного захвата линии мышью
     const hit = vertical
-      ? guide
-          .rect(HIT_THICKNESS, height)
-          .move(position - HIT_THICKNESS / 2, 0)
+      ? guide.rect(HIT_THICKNESS, height).move(position - HIT_THICKNESS / 2, 0)
       : guide.rect(width, HIT_THICKNESS).move(0, position - HIT_THICKNESS / 2);
     hit
       .fill({ color: "#000", opacity: 0 })
@@ -89,7 +85,10 @@ export function initGuides(draw, size = {}) {
 
     const updatePosition = (p) => {
       // Не выпускаем направляющую за пределы svg canvas (актуальные размеры)
-      position = Math.min(Math.max(p, 0), vertical ? canvasSize.width : canvasSize.height);
+      position = Math.min(
+        Math.max(p, 0),
+        vertical ? canvasSize.width : canvasSize.height
+      );
       if (vertical) {
         core.plot(position, 0, position, canvasSize.height);
         hit.x(position - HIT_THICKNESS / 2);
@@ -148,7 +147,9 @@ export function resizeGuides(width, height) {
 
   const hG = elements.h;
   hG.core.plot(0, clampPos(hG.position(), h), w, clampPos(hG.position(), h));
-  hG.hit.size(w, HIT_THICKNESS).y(clampPos(hG.position(), h) - HIT_THICKNESS / 2);
+  hG.hit
+    .size(w, HIT_THICKNESS)
+    .y(clampPos(hG.position(), h) - HIT_THICKNESS / 2);
 
   ["v1", "v2"].forEach((key) => {
     const g = elements[key];
