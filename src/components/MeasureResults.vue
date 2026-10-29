@@ -1,7 +1,7 @@
 <template>
   <q-list v-show="om.lateral_side" dense>
     <q-item-label header>
-      {{ om.side == "left" ? "Левая" : "Правая" }} сторона
+      <div class="text-subtitle1"> {{ om.side == "left" ? "Левая" : "Правая" }} сторона </div>
     </q-item-label>
     <q-item>
       <strong class="q-mr-sm">Длина:</strong> {{ om.length.toFixed(1) }}

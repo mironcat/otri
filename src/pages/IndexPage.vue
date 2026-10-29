@@ -51,54 +51,84 @@
       <q-btn color="primary" @click="setScaleBar" label="Задать масштаб" />
       <q-input v-show="om.settings.scalebar_ready" dense v-model="om.label" filled label="Метка"
         style="max-width: 150px" class="q-mr-sm" />
-      <q-btn v-show="om.settings.scalebar_ready" icon="save" color="primary" @click="addRecord"
-        label="Добавить запись" class="q-mr-sm" />
+      <q-btn v-show="om.settings.scalebar_ready" icon="save" color="primary" @click="addRecord" label="Добавить запись"
+        class="q-mr-sm" />
       <q-btn v-show="rows.lateral.length > 0 || rows.dorsal.length > 0" color="brown" icon-right="archive"
         label="Экспорт в CSV" no-caps @click="exportCombinedTable" />
-      <q-btn :color="showTables ? 'secondary' : 'primary'" :icon="showTables ? 'visibility_off' : 'visibility'"
-        :label="showTables ? 'Скрыть таблицы' : 'Показать таблицы'" no-caps class="q-ml-auto"
-        @click="showTables = !showTables">
-        <q-tooltip>{{ showTables ? 'Скрыть таблицы измерений' : 'Показать таблицы измерений' }}</q-tooltip>
+      <q-btn v-show="rows.lateral.length > 0 || rows.dorsal.length > 0" :color="showTables ? 'secondary' : 'primary'"
+        :icon="showTables ? 'visibility_off' : 'visibility'" :label="showTables ? 'Скрыть' : 'Показать результаты'"
+        no-caps class="q-ml-auto" @click="showTables = !showTables">
+        <q-tooltip>{{ showTables ? 'Скрыть результаты' : 'Показать результаты' }}</q-tooltip>
       </q-btn>
       <!-- <q-chip>{{ scales.factor }}</q-chip> -->
     </div>
     <div v-show="showTables" class="tables-panel q-mx-md q-mb-md">
-      <div class="row">
-        <div class="q-gutter-sm" style="width: 100%; overflow-x: auto">
-          <q-table :rows="rows.lateral" :columns="columns.lateral" row-key="record_no" no-data-label="нет данных"
-            style="min-width: 1500px">
-            <template v-slot:body-cell-action="props">
-              <q-td :props="props">
-                <q-btn color="primary" icon-right="delete" no-caps flat dense @click="deleteLateral(props.row)" />
-              </q-td>
-            </template>
-            <template v-slot:top-left>
-              <q-btn color="grey" icon-right="archive" label="Экспорт в CSV" size="sm" no-caps
-                @click="exportTable('lateral')" />
-            </template>
-            <template v-slot:top-right><strong>Латеральная (левая)</strong></template>
-          </q-table>
+
+      <div class="tables-split">
+        <div class="tables-half col q-pr-sm">
+          <div class="row">
+            <div class="table-wrap">
+              <q-table :rows="rows.lateral" :columns="columns.lateral" row-key="record_no" no-data-label="нет данных"
+                @row-click="onRowClick" :row-class="rowClass">
+                <template v-slot:body-cell-action="props">
+                  <q-td :props="props">
+                    <q-btn color="primary" icon-right="delete" no-caps flat dense
+                      @click.stop="deleteLateral(props.row)" />
+                  </q-td>
+                </template>
+                <template v-slot:top-left>
+                  <strong>Латеральная (левая)</strong>
+                  <!-- <q-btn color="grey" icon-right="archive" label="Экспорт в CSV" size="sm" no-caps
+                    @click="exportTable('lateral')" /> -->
+
+                </template>
+                <template v-slot:top-right>
+                  <q-btn size="sm" no-caps class="q-ml-sm" :color="showDescription ? 'secondary' : 'primary'"
+                    :icon="showDescription ? 'visibility_off' : 'visibility'"
+                    :label="showDescription ? 'Скрыть описание' : 'Показать описание'"
+                    @click="showDescription = !showDescription">
+                    <q-tooltip>{{ showDescription ? 'Скрыть текстовое описание' : 'Показать текстовое описание'
+                    }}</q-tooltip>
+                  </q-btn>
+                </template>
+              </q-table>
+            </div>
+          </div>
+          <div class="row q-mt-md">
+            <div class="table-wrap">
+              <q-table :rows="rows.dorsal" :columns="columns.dorsal" row-key="record_no" no-data-label="нет данных"
+                @row-click="onRowClick" :row-class="rowClass">
+                <template v-slot:body-cell-action="props">
+                  <q-td :props="props">
+                    <q-btn color="primary" icon-right="delete" no-caps flat dense
+                      @click.stop="deleteDorsal(props.row)" />
+                  </q-td>
+                </template>
+                <template v-slot:top-left>
+                  <strong>Дорсальная</strong>
+                  <!-- <q-input v-show="om.settings.scalebar_ready" dense v-model="om.label" filled label="label"
+                    style="max-width: 150px" class="q-mr-sm" />
+                  <q-btn v-show="om.settings.scalebar_ready" color="primary" @click="addRecord" label="add record"
+                    class="q-mr-lg" /> -->
+                  <!-- <q-btn color="grey" icon-right="archive" label="Экспорт в CSV" size="sm" no-caps
+                    @click="exportTable('dorsal')" /> -->
+                </template>
+                <template v-slot:top-right></template>
+              </q-table>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="row q-mt-md">
-        <div class="q-gutter-sm" style="width: 100%; overflow-x: auto">
-          <q-table :rows="rows.dorsal" :columns="columns.dorsal" row-key="record_no" no-data-label="нет данных"
-            style="min-width: 1200px">
-            <template v-slot:body-cell-action="props">
-              <q-td :props="props">
-                <q-btn color="primary" icon-right="delete" no-caps flat dense @click="deleteDorsal(props.row)" />
-              </q-td>
-            </template>
-            <template v-slot:top-left>
-              <!-- <q-input v-show="om.settings.scalebar_ready" dense v-model="om.label" filled label="label"
-                style="max-width: 150px" class="q-mr-sm" />
-              <q-btn v-show="om.settings.scalebar_ready" color="primary" @click="addRecord" label="add record"
-                class="q-mr-lg" /> -->
-              <q-btn color="grey" icon-right="archive" label="Экспорт в CSV" size="sm" no-caps
-                @click="exportTable('dorsal')" />
-            </template>
-            <template v-slot:top-right><strong>Дорсальная</strong></template>
-          </q-table>
+        <div v-show="showDescription" class="description-half col q-pl-md">
+          <div class="row items-center q-mb-xs">
+            <div class="text-subtitle2">Описание</div>
+            <q-space />
+            <q-select v-model="selectedRecordNo" :options="recordOptions" option-value="record_no"
+              option-label="recordLabel" emit-value map-options dense outlined options-dense label="Запись"
+              :disable="recordOptions.length === 0" class="record-select" />
+          </div>
+          <div class="description-body">
+            <Description :om="selectedMeasurements" />
+          </div>
         </div>
       </div>
     </div>
@@ -524,9 +554,11 @@ const rows = ref({
   dorsal: [],
 });
 // Видимость таблиц с измерениями под canvas
-const showTables = ref(true);
+const showTables = ref(false);
+// Видимость текстового описания (правая половина нижней панели)
+const showDescription = ref(true);
 
-import { watch, inject } from "vue";
+import { watch, inject, computed } from "vue";
 import { exportFile } from "quasar";
 import "@svgdotjs/svg.draggable.js";
 import { Matrix, Point } from "@svgdotjs/svg.js";
@@ -538,6 +570,8 @@ import DorsalSideObjects from "src/scripts/dorsalobjects.js";
 import concaveLeftSideObjects from "src/scripts/concaveobjects.js";
 import { initGuides, resizeGuides } from "src/scripts/guides.js";
 import { initMagnifier } from "src/scripts/magnifier.js";
+import { combineRecordMeasurements } from "src/scripts/interpretation.js";
+import Description from "components/Description.vue";
 
 const canvasRef = ref();
 // let imagepath = ref('/src/assets/ost1.jpg')
@@ -577,6 +611,84 @@ const om = ref({
     pinToImage: { left: false, dorsal: false },
   },
 });
+// Запись, выбранная для текстового описания
+const selectedRecordNo = ref(null);
+
+// Список записей: латеральная и дорсальная строки объединяются по record_no
+const recordOptions = computed(() => {
+  const records = new Map();
+  rows.value.lateral.forEach((row) => {
+    records.set(row.record_no, {
+      record_no: row.record_no,
+      label: row.label,
+      filename: row.filename,
+      sides: ["Л"],
+    });
+  });
+  rows.value.dorsal.forEach((row) => {
+    const record = records.get(row.record_no);
+    if (record) {
+      record.sides.push("Д");
+    } else {
+      records.set(row.record_no, {
+        record_no: row.record_no,
+        label: row.label,
+        filename: row.filename,
+        sides: ["Д"],
+      });
+    }
+  });
+  return [...records.values()]
+    .sort((a, b) => a.record_no - b.record_no)
+    .map((record) => ({
+      ...record,
+      recordLabel: `№ ${record.record_no} — ${record.label || "без метки"} (${record.sides.join("+")})`,
+    }));
+});
+
+// Если выбранной записи больше нет (например, её удалили),
+// выбираем последнюю сохранённую
+watch(recordOptions, (options) => {
+  if (!options.length) {
+    selectedRecordNo.value = null;
+    return;
+  }
+  if (!options.some((option) => option.record_no === selectedRecordNo.value)) {
+    selectedRecordNo.value = options[options.length - 1].record_no;
+  }
+});
+
+// Строки таблиц для выбранной записи
+const selectedRecord = computed(() => {
+  const recordNo = selectedRecordNo.value;
+  if (recordNo === null || recordNo === undefined) return null;
+  return {
+    lateral:
+      rows.value.lateral.find((row) => row.record_no === recordNo) || null,
+    dorsal:
+      rows.value.dorsal.find((row) => row.record_no === recordNo) || null,
+  };
+});
+
+// Измерения выбранной записи для компонента описания
+const selectedMeasurements = computed(() => {
+  const record = selectedRecord.value;
+  if (!record) return null;
+  return combineRecordMeasurements(record.lateral, record.dorsal);
+});
+
+// Клик по строке таблицы выбирает запись и показывает её описание
+const onRowClick = (evt, row) => {
+  if (row?.record_no === undefined || row?.record_no === null) return;
+  selectedRecordNo.value = row.record_no;
+  showDescription.value = true;
+};
+
+// Подсветка строки выбранной записи
+const rowClass = computed(
+  () => (row) =>
+    row.record_no === selectedRecordNo.value ? "selected-record-row" : "",
+);
 const scales = ref({
   length: 100,
   factor: 1,
@@ -818,6 +930,11 @@ const addRecord = () => {
     }))(rawdata);
 
     rows.value.dorsal.push(Object.assign({}, basedata, dorsaldata));
+  }
+
+  // Сразу показываем описание только что сохранённой записи
+  if (om.value.lateral_side || om.value.dorsal_side) {
+    selectedRecordNo.value = om.value.record_no;
   }
 };
 const deleteLateral = (r) => {
@@ -1192,18 +1309,88 @@ image {
   overflow: hidden;
 }
 
-/* Таблицы измерений под канвасом: ограниченная высота + прокрутка,
+/* Нижняя панель: слева таблицы, справа текстовое описание.
+   Ограниченная высота + независимая прокрутка половин,
    чтобы канвас всегда сохранял свободное место */
 .tables-panel {
   flex: 0 1 auto;
   min-height: 0;
   max-height: 40vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Две равные половины по горизонтали */
+.tables-split {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.tables-half {
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
 }
 
-/* Стили для таблиц с горизонтальной прокруткой */
-.q-table__container {
-  overflow-x: auto;
+/* Правая половина с описанием */
+.description-half {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #e0e0e0;
+}
+
+/* Селектор записи в заголовке описания */
+.record-select {
+  min-width: 190px;
+  max-width: 260px;
+}
+
+/* Прокручиваемая область описания */
+.description-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 8px;
+  background: #fff;
+}
+
+/* Клик по строке таблицы выбирает запись для описания */
+.tables-half .q-table tbody tr {
+  cursor: pointer;
+}
+
+/* Подсветка выбранной записи */
+.q-table tbody tr.selected-record-row,
+.q-table tbody tr.selected-record-row > td {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* Таблицы подстраиваются под ширину половины панели:
+   без горизонтальной прокрутки, содержимое переносится */
+.table-wrap {
+  width: 100%;
+  min-width: 0;
+}
+
+.tables-half .q-table__middle {
+  overflow-x: hidden;
+}
+
+.tables-half table.q-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Верхняя панель таблицы (заголовок и кнопка экспорта)
+   тоже переносится, а не расширяет таблицу */
+.tables-half .q-table__top {
+  flex-wrap: wrap;
 }
 
 /* Узкие колонки для компактного отображения */
@@ -1213,10 +1400,15 @@ image {
   font-size: 12px;
 }
 
-/* Заголовки колонок с переносом текста */
-.q-table th {
+/* Заголовки и ячейки с переносом текста */
+.q-table th,
+.q-table td {
   white-space: normal;
   word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.q-table th {
   max-width: 100px;
 }
 </style>

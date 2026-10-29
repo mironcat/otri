@@ -1,17 +1,13 @@
 <template>
-  <q-item-label header>
-    Общее описание
-  </q-item-label>
-  <q-item>
-    По длине раковины {{ lateraShellLength }}.
-  </q-item>
-  <q-item>
-    По степени удлиненности {{ degreeOfElongation }}.
-  </q-item>
+  <q-list dense>
+    <q-item>
+      По длине раковины {{ lateraShellLength }}.
+    </q-item>
+    <q-item>
+      По степени удлиненности {{ degreeOfElongation }}.
+    </q-item>
+  </q-list>
   <q-list v-show="om.lateral_side" dense>
-    <q-item-label header>
-      Левая сторона
-    </q-item-label>
     <q-item>
       <strong>Передне-спинная дуга (ad) </strong>
     </q-item>
