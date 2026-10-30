@@ -1099,11 +1099,16 @@ const setScaleBar = () => {
   concave_lso.updateMeasures();
   dso.updateMeasures();
 };
+let currentImageUrl = null;
 const fileUploaded = (file) => {
+  if (!file) return;
   draw.clear();
+  // Electron 32+ removed File.path, so use a blob URL instead of a local path
+  if (currentImageUrl) URL.revokeObjectURL(currentImageUrl);
+  currentImageUrl = URL.createObjectURL(file);
   // mainimage = draw.image(file.path).attr('id', 'mainimage').size(400, 400).draggable().move(300, 100)
   mainimage = draw.group().attr({ id: "maig" }).draggable();
-  const img = draw.image(file.path).attr("id", "mainimage").size(400, 400);
+  const img = draw.image(currentImageUrl).attr("id", "mainimage").size(400, 400);
   mainimage.add(img.move(300, 100));
   addImageFrame(mainimage, img);
   mainimage.on("dragmove", onImageDrag);
