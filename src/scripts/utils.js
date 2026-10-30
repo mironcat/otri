@@ -87,7 +87,7 @@ function getLineFromAnglePoint(AP, PMC1, PMC2, corner) {
   return tempLine;
 }
 
-import { getLineScale } from "src/scripts/geostyle.js";
+import { getLineScale } from "@/scripts/geostyle.js";
 
 function addMouseOverToPoint(point) {
   point.on("mouseover", () =>

@@ -5,8 +5,9 @@
   "productName": "Otri",
   "author": "Eugeny Karasev <534temp@gmail.com>",
   "private": true,
+  "type": "module",
   "scripts": {
-    "lint": "eslint --ext .js,.vue ./",
+    "lint": "eslint -c ./eslint.config.mjs \"./src*/**/*.{js,vue}\"",
     "format": "prettier --write \"**/*.{js,vue,scss,html,md,json}\" --ignore-path .gitignore",
     "test": "echo \"No test specified\" && exit 0",
     "dev": "quasar dev",
@@ -22,29 +23,28 @@
     "release:win": "npm run clean && npm run package:win"
   },
   "dependencies": {
-    "@quasar/cli": "^5.0.9",
-    "@quasar/extras": "^1.18.0",
+    "@quasar/extras": "^2.1.0",
     "@svgdotjs/svg.draggable.js": "^3.0.3",
     "@svgdotjs/svg.js": "^3.2.0",
     "quasar": "^2.35.2",
-    "vue": "^3.5.32",
-    "vue-router": "^4.6.4"
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0"
   },
   "devDependencies": {
-    "@quasar/app-vite": "^1.11.0",
-    "autoprefixer": "^10.5.0",
-    "electron": "^22.3.27",
+    "@eslint/js": "^10.0.1",
+    "@quasar/app-vite": "^3.10.3",
+    "@quasar/cli": "^5.0.9",
+    "@vue/eslint-config-prettier": "^10.2.0",
+    "autoprefixer": "^10.6.2",
     "electron-builder": "^26.8.1",
-    "electron-packager": "^17.1.2",
-    "eslint": "^8.57.1",
-    "eslint-config-prettier": "^8.10.2",
-    "eslint-plugin-vue": "^9.33.0",
+    "eslint": "^10.13.0",
+    "eslint-plugin-vue": "^10.12.0",
+    "globals": "^17.13.0",
     "postcss": "^8.5.9",
-    "prettier": "^2.8.8"
+    "prettier": "^3.9.10"
   },
   "engines": {
-    "node": ">=18",
-    "npm": ">= 6.13.4",
-    "yarn": ">= 1.21.1"
+    "node": ">=22.22.0",
+    "npm": ">= 6.13.4"
   }
 }

@@ -135,6 +135,10 @@
   </q-page>
 </template>
 <script setup>
+import { useQuasar } from "quasar";
+
+const $q = useQuasar();
+
 function wrapCsvValue(val, formatFn, row) {
   let formatted = formatFn !== void 0 ? formatFn(val, row) : val;
 
@@ -563,15 +567,15 @@ import { exportFile } from "quasar";
 import "@svgdotjs/svg.draggable.js";
 import { Matrix, Point } from "@svgdotjs/svg.js";
 import { onMounted, onBeforeUnmount, ref } from "vue";
-// import { lineTolineIntersectionPoint, getLengthByCoordinates, getAnglePoints } from 'src/scripts/utils.js'
-import { initScalebar, getScalebarLength } from "src/scripts/scalebar.js";
-import leftSideObjects from "src/scripts/leftsideobjects.js";
-import DorsalSideObjects from "src/scripts/dorsalobjects.js";
-import concaveLeftSideObjects from "src/scripts/concaveobjects.js";
-import { initGuides, resizeGuides } from "src/scripts/guides.js";
-import { initMagnifier } from "src/scripts/magnifier.js";
-import { combineRecordMeasurements } from "src/scripts/interpretation.js";
-import Description from "components/Description.vue";
+// import { lineTolineIntersectionPoint, getLengthByCoordinates, getAnglePoints } from '@/scripts/utils.js'
+import { initScalebar, getScalebarLength } from "@/scripts/scalebar.js";
+import leftSideObjects from "@/scripts/leftsideobjects.js";
+import DorsalSideObjects from "@/scripts/dorsalobjects.js";
+import concaveLeftSideObjects from "@/scripts/concaveobjects.js";
+import { initGuides, resizeGuides } from "@/scripts/guides.js";
+import { initMagnifier } from "@/scripts/magnifier.js";
+import { combineRecordMeasurements } from "@/scripts/interpretation.js";
+import Description from "@/components/Description.vue";
 
 const canvasRef = ref();
 // let imagepath = ref('/src/assets/ost1.jpg')
@@ -788,7 +792,7 @@ watch(
 // --- Управление визуальными размерами точек и линий -------------------------
 // Кнопка "tune" в шапке меняет множители; здесь применяем их
 // относительно предыдущих значений к группам всех трёх наборов.
-import { changeScales } from "src/scripts/geostyle.js";
+import { changeScales } from "@/scripts/geostyle.js";
 
 // Подгонка размеров SVG под контейнер: канвас растягивается на всё
 // свободное место (ширина и высота), оставшееся от панелей и таблиц.

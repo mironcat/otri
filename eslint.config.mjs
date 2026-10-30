@@ -1,0 +1,81 @@
+import js from '@eslint/js'
+import globals from 'globals'
+import pluginVue from 'eslint-plugin-vue'
+import pluginQuasar from '@quasar/app-vite/eslint'
+import prettierSkipFormatting from '@vue/eslint-config-prettier/skip-formatting'
+
+export default [
+  {
+    /**
+     * Ignore the following files.
+     * Please note that pluginQuasar.configs.recommended() already ignores
+     * the "node_modules" folder for you (and all other Quasar project
+     * relevant folders and files).
+     *
+     * ESLint requires "ignores" key to be the only one in this object
+     */
+    // ignores: []
+  },
+
+  ...pluginQuasar.configs.recommended(),
+  js.configs.recommended,
+
+  /**
+   * https://eslint.vuejs.org
+   *
+   * pluginVue.configs.base
+   *   -> Settings and rules to enable correct ESLint parsing.
+   * pluginVue.configs[ 'flat/essential']
+   *   -> base, plus rules to prevent errors or unintended behavior.
+   */
+  ...pluginVue.configs['flat/essential'],
+
+  {
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+
+      globals: {
+        ...globals.browser,
+        ...globals.node, // SSR, SSG, Electron, config files
+        ga: 'readonly', // Google Analytics
+        cordova: 'readonly',
+        Capacitor: 'readonly',
+        chrome: 'readonly' // BEX related
+      }
+    },
+
+    // add your custom rules here
+    rules: {
+      'prefer-promise-reject-errors': 'off',
+
+      // legacy measurement scripts use unused event/callback args
+      'no-unused-vars': [
+        'warn',
+        {
+          args: 'none',
+          caughtErrors: 'none',
+          ignoreRestSiblings: true
+        }
+      ],
+
+      // false positives on <script setup> refs that are only read in templates
+      'no-useless-assignment': 'warn',
+
+      // allow debugger during development only
+      'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off'
+    }
+  },
+
+  {
+    // legacy measurement drafts, not imported anywhere (kept for reference)
+    files: ['src/scripts/mo.js', 'src/scripts/triangles.js'],
+    rules: {
+      'no-undef': 'off',
+      'no-redeclare': 'off',
+      'no-unused-vars': 'off'
+    }
+  },
+
+  prettierSkipFormatting
+]

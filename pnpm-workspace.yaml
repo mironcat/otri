@@ -1,5 +1,11 @@
+# https://pnpm.io/settings
+
 allowBuilds:
   '@parcel/watcher': true
+  core-js: true
   electron: true
   electron-winstaller: true
   esbuild: true
+  lightningcss: true
+  rolldown: true
+  unrs-resolver: true

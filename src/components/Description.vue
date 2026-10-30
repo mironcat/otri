@@ -74,7 +74,7 @@ import {
   getSLNTypeofCurve,
   getAlfaTypeofCurve,
   getOrientationTypeofCurve,
-} from "src/scripts/interpretation.js";
+} from "@/scripts/interpretation.js";
 
 const props = defineProps({
   om: { type: Object, default: null },

@@ -61,8 +61,8 @@
 
 <script setup>
 import { ref, onMounted, inject, computed } from "vue";
-import MeasureResults from "components/MeasureResults.vue";
-import InterpretationResults from "components/InterpretationResults.vue";
+import MeasureResults from "@/components/MeasureResults.vue";
+import InterpretationResults from "@/components/InterpretationResults.vue";
 import {
   getGuidesVisibility,
   setGuideVisible,
@@ -81,7 +81,7 @@ import {
 import { APP_VERSION } from "../config/version";
 const version = APP_VERSION;
 // const bus = inject('bus')
-// import EssentialLink from 'components/EssentialLink.vue'
+// import EssentialLink from '@/components/EssentialLink.vue'
 const leftDrawerOpen = ref(true);
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;

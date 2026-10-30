@@ -1,4 +1,4 @@
-import { lineTolineIntersectionPoint, getAnglePoints, getLengthByCoordinates } from 'src/scripts/utils.js'
+import { lineTolineIntersectionPoint, getAnglePoints, getLengthByCoordinates } from '@/scripts/utils.js'
 /*
 Drawing steps
 draw all objects
@@ -9,7 +9,7 @@ draw all objects
     -
 
 */
-import makeTriangle from 'src/scripts/triangles.js';
+import makeTriangle from '@/scripts/triangles.js';
 export default function measureObjects({ id, draw, om, scales, bus }) {
   let mainGroup = draw.group().attr({ id: 'mainGroup' })
   const defaultParams = { //default Base Frame Size

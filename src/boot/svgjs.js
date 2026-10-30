@@ -1,10 +1,10 @@
-import { boot } from 'quasar/wrappers'
+import { defineBoot } from '#q-app'
 import { SVG } from '@svgdotjs/svg.js'
 import { EventBus } from 'quasar'
 // "async" is optional;
 // more info on params: https://v2.quasar.dev/quasar-cli/boot-files
 
-export default boot(({ app }) => {
+export default defineBoot(({ app }) => {
   // for use inside Vue files (Options API) through this.$axios and this.$api
   const bus = new EventBus()
   // app.config.globalProperties.$draw = SVG
@@ -13,4 +13,3 @@ export default boot(({ app }) => {
   app.provide('svg', SVG())
   app.provide('bus', bus)
 })
-

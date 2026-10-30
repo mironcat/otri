@@ -1,17 +1,20 @@
 import { app, BrowserWindow } from 'electron'
-import path from 'path'
-import os from 'os'
+import path from 'node:path'
+import os from 'node:os'
+import {
+  registerQuasarRuntime,
+  resolveElectronAssetsPath
+} from '#q-app/electron/main'
+
 // needed in case process is undefined under Linux
 const platform = process.platform || os.platform()
 
-let mainWindow
-
-function createWindow() {
+async function createWindow () {
   /**
    * Initial window options
    */
-  mainWindow = new BrowserWindow({
-    icon: path.resolve(__dirname, 'icons/icon.png'), // tray icon
+  const mainWindow = new BrowserWindow({
+    icon: resolveElectronAssetsPath('icons/icon.png'), // Windows and Linux
     width: 1200,
     height: 1200,
     useContentSize: true,
@@ -19,13 +22,17 @@ function createWindow() {
       contextIsolation: true,
       webSecurity: false,
       // More info: https://v2.quasar.dev/quasar-cli-vite/developing-electron-apps/electron-preload-script
-      preload: path.resolve(__dirname, process.env.QUASAR_ELECTRON_PRELOAD)
+      preload: path.join(import.meta.dirname, 'electron-preload.cjs')
     }
   })
 
-  mainWindow.loadURL(process.env.APP_URL)
+  if (import.meta.env.QUASAR_DEV) {
+    await mainWindow.loadURL(import.meta.env.QUASAR_APP_URL)
+  } else {
+    await mainWindow.loadFile('index.html')
+  }
 
-  if (process.env.DEBUGGING) {
+  if (import.meta.env.QUASAR_DEBUG) {
     // if on DEV or Production with debug enabled
     mainWindow.webContents.openDevTools()
   } else {
@@ -34,27 +41,21 @@ function createWindow() {
       mainWindow.webContents.closeDevTools()
     })
   }
-
-  mainWindow.on('closed', () => {
-    mainWindow = null
-  })
-
-  // const publicFolder = path.resolve(__dirname, process.env.QUASAR_PUBLIC_FOLDER)
-  // console.log(publicFolder)
-
 }
 
-app.whenReady().then(createWindow)
+void app.whenReady().then(() => {
+  registerQuasarRuntime()
+  void createWindow()
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      void createWindow()
+    }
+  })
+})
 
 app.on('window-all-closed', () => {
   if (platform !== 'darwin') {
     app.quit()
   }
-})
-
-app.on('activate', () => {
-  if (mainWindow === null) {
-    createWindow()
-  }
-
 })

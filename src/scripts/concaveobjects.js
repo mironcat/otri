@@ -22,8 +22,8 @@ import {
   constrainPointMovement,
   constrainVerticalPointMovement,
   addLockToggle,
-} from "src/scripts/utils.js";
-import { applyScales, getLineScale } from "src/scripts/geostyle.js";
+} from "@/scripts/utils.js";
+import { applyScales, getLineScale } from "@/scripts/geostyle.js";
 export default function concaveLeftSideObjects(draw, om, scales, bus) {
   let mobjects = draw.group().attr({ id: "concave-lso" });
   let moDat = {

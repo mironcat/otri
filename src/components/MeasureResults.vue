@@ -79,7 +79,7 @@
 <script setup>
 import { inject, ref } from "vue";
 const bus = inject("bus");
-// import EssentialLink from 'components/EssentialLink.vue'
+// import EssentialLink from '@/components/EssentialLink.vue'
 const om = ref({
   record_no: 0,
   label: "без метки",
