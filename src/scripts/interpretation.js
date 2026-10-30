@@ -5,9 +5,9 @@
 
 export function getShellLengthType(length) {
   if (!(length > 0)) return "";
-  if (length < 500) return "мелкие";
-  if (length < 900) return "средние";
-  return "крупные";
+  if (length < 500) return "мелкая";
+  if (length < 900) return "средней длины";
+  return "крупная";
 }
 export function getPlenateType(plenateRatio) {
   const ratio = Number(plenateRatio);
@@ -112,8 +112,8 @@ export function buildDescription(om) {
     lines.push(
       `По степени удлинённости${basis}: ${getDegreeOfElongation(
         length,
-        height
-      )}.`
+        height,
+      )}.`,
     );
   }
   if (hasLateral) {
@@ -136,7 +136,7 @@ export function buildDescription(om) {
     lines.push("Брюшной край");
     lines.push(
       `V: lv = ${formatNumber(om.v?.lv)}, lvl = ${formatNumber(om.v?.lvl)}, ` +
-        `dv = ${formatNumber(om.v?.dv)}.`
+        `dv = ${formatNumber(om.v?.dv)}.`,
     );
   }
 
@@ -223,7 +223,5 @@ export function combineRecordMeasurements(lateralRow, dorsalRow) {
 // объединяются по номеру измерения (record_no)
 export function buildDescriptionFromRecords(lateralRow, dorsalRow) {
   const om = combineRecordMeasurements(lateralRow, dorsalRow);
-  return om
-    ? buildDescription(om)
-    : "Недостаточно данных для описания.";
+  return om ? buildDescription(om) : "Недостаточно данных для описания.";
 }

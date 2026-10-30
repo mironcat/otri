@@ -84,7 +84,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
       size: 14,
       family: "Arial",
     })
-    .move(0, -17);
+    .move(2, 16);
 
   const frameResizer = draw
     .rect(15, 15)
@@ -521,6 +521,8 @@ export default function leftSideObjects(draw, om, scales, bus) {
     om.value.length = baseFrame.attr("width") * scales.value.factor;
     om.value.height = baseFrame.attr("height") * scales.value.factor;
     const bFA = baseFrame.attr(["x", "y", "width", "height"]);
+    // подпись стороны — всегда в верхнем левом углу Base Frame
+    sideLabel.attr({ x: bFA.x + 2, y: bFA.y + 16 });
     const p = {
       //coordinates of baseFrame corner points
       ad: { x: bFA.x, y: bFA.y },
@@ -684,6 +686,20 @@ export default function leftSideObjects(draw, om, scales, bus) {
     bus,
     frameResizer,
     "left",
+    {
+      points: {
+        a: aPMC,
+        p: pPMC,
+        d: dPMC,
+        v: vPMC,
+        t_ad: adTangentPoint,
+        t_pd: pdTangentPoint,
+        t_av: avTangentPoint,
+        t_pv: pvTangentPoint,
+      },
+      updateMeasures,
+      show,
+    },
   );
   // применить текущие множители размеров (точки/линии) — только r и stroke-width
   applyScales(mobjects);

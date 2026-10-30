@@ -244,6 +244,7 @@ import concaveLeftSideObjects from "@/scripts/concaveobjects.js";
 import { initGuides, resizeGuides } from "@/scripts/guides.js";
 import { initMagnifier } from "@/scripts/magnifier.js";
 import { combineRecordMeasurements } from "@/scripts/interpretation.js";
+import { snapshotOverlayEntries } from "@/scripts/utils.js";
 import Description from "@/components/Description.vue";
 
 const canvasRef = ref();
@@ -516,12 +517,45 @@ onBeforeUnmount(() => {
 
 const addRecord = () => {
   om.value.record_no = om.value.record_no + 1;
+  const rows2add = buildRecordRows(om.value.record_no);
+  rows2add.lateral.forEach((r) => rows.value.lateral.push(r));
+  rows2add.dorsal.forEach((r) => rows.value.dorsal.push(r));
+
+  // Сразу показываем описание только что сохранённой записи
+  if (om.value.lateral_side || om.value.dorsal_side) {
+    selectedRecordNo.value = om.value.record_no;
+  }
+};
+
+// Обновить уже существующую запись (из зелёной иконки «записи» на рамке):
+// заменяет строки с record_no текущими измерениями, сохраняя номер записи.
+const updateRecord = (recordNo) => {
+  if (recordNo === null || recordNo === undefined) return;
+  const { lateral, dorsal } = buildRecordRows(recordNo);
+  const upsert = (list, rows2up) => {
+    rows2up.forEach((row) => {
+      const idx = list.findIndex((r) => r.record_no === recordNo);
+      if (idx >= 0) list.splice(idx, 1, row);
+      else list.push(row);
+    });
+  };
+  upsert(rows.value.lateral, lateral);
+  upsert(rows.value.dorsal, dorsal);
+  if (lateral.length || dorsal.length) {
+    selectedRecordNo.value = recordNo;
+    showDescription.value = true;
+  }
+};
+
+// Построить данные латеральной/дорсальной строки для записи с указанным номером
+const buildRecordRows = (recordNo) => {
   const rawdata = { ...JSON.parse(JSON.stringify(om.value)) };
   const basedata = (({ record_no, label, filename, side }) => ({
-    record_no,
+    record_no: recordNo,
     label,
     filename,
   }))(rawdata);
+  const result = { lateral: [], dorsal: [] };
 
   if (om.value.lateral_side) {
     // ========== НОВАЯ СТРУКТУРА ДАННЫХ (разделенные поля) ==========
@@ -559,7 +593,7 @@ const addRecord = () => {
       v_dv: v.dv,
     }))(rawdata);
 
-    rows.value.lateral.push(Object.assign({}, basedata, lateraldata));
+    result.lateral.push(Object.assign({}, basedata, lateraldata));
   }
 
   if (om.value.dorsal_side) {
@@ -602,13 +636,10 @@ const addRecord = () => {
       pl_sln: pl.sln,
     }))(rawdata);
 
-    rows.value.dorsal.push(Object.assign({}, basedata, dorsaldata));
+    result.dorsal.push(Object.assign({}, basedata, dorsaldata));
   }
 
-  // Сразу показываем описание только что сохранённой записи
-  if (om.value.lateral_side || om.value.dorsal_side) {
-    selectedRecordNo.value = om.value.record_no;
-  }
+  return result;
 };
 const deleteRecord = (row) => {
   rows.value.lateral = rows.value.lateral.filter(
@@ -617,6 +648,7 @@ const deleteRecord = (row) => {
   rows.value.dorsal = rows.value.dorsal.filter(
     (r) => r.record_no !== row.record_no
   );
+  bus.emit("record-deleted", { recordNo: row.record_no });
 };
 const getFactor = () => {
   scales.value.factor =
@@ -637,6 +669,12 @@ const pinnedGroups = () =>
   followTargets()
     .filter((t) => om.value.settings.pinToImage[t.frame])
     .map((t) => t.group);
+
+// Группы «снимков» рамок (копии рамок с точками, закреплённые на изображении).
+// В отличие от измерительных рамок, снимки всегда следуют за изображением,
+// потому что их задача — быть привязанными к изображению независимо от замка.
+const snapshotGroups = () =>
+  [...snapshotOverlayEntries].map((entry) => entry.group).filter(Boolean);
 
 // Смещение в локальных координатах группы -> вектор в координатах холста.
 // Нужно, чтобы рамка и картинка двигались вместе даже после поворота/зума.
@@ -664,7 +702,7 @@ const moveGroupByScreenDelta = (group, sx, sy) => {
 // Работает при любом уже применённом перетаскивании/повороте/зуме картинки.
 const followZoom = (factor) => {
   if (factor === 1) return;
-  const groups = pinnedGroups();
+  const groups = [...pinnedGroups(), ...snapshotGroups()];
   if (!groups.length) return;
   const mimg = mainimage.matrixify();
   const b = mainimage.bbox(); // локальный бокс содержимого картинки
@@ -713,7 +751,7 @@ const onWheelZoom = (event) => {
 // Поворот со следованием оверлеев при pinToImage (только для рамок с замком)
 const rotateImage = (angle) => {
   mainimage.rotate(angle);
-  const groups = pinnedGroups();
+  const groups = [...pinnedGroups(), ...snapshotGroups()];
   if (!groups.length) return;
   const mimg = mainimage.matrixify();
   const b = mainimage.bbox();
@@ -730,7 +768,7 @@ const rotateImage = (angle) => {
 const onImageDrag = function (event) {
   const { dx, dy } = event.detail;
   const d = localToScreenDelta(mainimage, dx, dy);
-  pinnedGroups().forEach((g) => moveGroupByScreenDelta(g, d.x, d.y));
+  [...pinnedGroups(), ...snapshotGroups()].forEach((g) => moveGroupByScreenDelta(g, d.x, d.y));
 };
 mainimage.on("dragmove", onImageDrag);
 
@@ -747,8 +785,27 @@ const onFrameDragged = ({ frame, group, dx, dy }) => {
       moveGroupByScreenDelta(t.group, d.x, d.y);
     }
   });
+  // снимки рамок всегда двигаются вместе с изображением
+  snapshotGroups().forEach((g) => {
+    if (g === group) return;
+    moveGroupByScreenDelta(g, d.x, d.y);
+  });
 };
 bus.on("frame-dragged", onFrameDragged);
+
+// --- Записи, добавляемые зелёной иконкой «Добавить запись» на рамке --------
+// ИндексPage — владелец таблицы записей, поэтому request-события из рамок
+// превращаем здесь в addRecord/updateRecord.
+bus.on("add-record-request", () => addRecord());
+bus.on("update-record-request", ({ recordNo }) => updateRecord(recordNo));
+// Карандашик на снимке рамки выбирает связанную запись для редактирования
+bus.on("record-selected", ({ recordNo }) => {
+  if (recordNo === null || recordNo === undefined) return;
+  selectedRecordNo.value = recordNo;
+  showDescription.value = true;
+  showTables.value = true;
+});
+
 const addScaleBar = () => {
   om.value.settings.scalebar_ready = false;
   scalebar = initScalebar(scalebar, draw, scales.value);
@@ -768,6 +825,8 @@ let currentImageUrl = null;
 const fileUploaded = (file) => {
   if (!file) return;
   draw.clear();
+  // снимки рамок живут в svg-дереве — после draw.clear() их группы удалены
+  snapshotOverlayEntries.clear();
   // Electron 32+ removed File.path, so use a blob URL instead of a local path
   if (currentImageUrl) URL.revokeObjectURL(currentImageUrl);
   currentImageUrl = URL.createObjectURL(file);

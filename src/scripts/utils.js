@@ -88,6 +88,11 @@ function getLineFromAnglePoint(AP, PMC1, PMC2, corner) {
 }
 
 import { getLineScale } from "@/scripts/geostyle.js";
+import { Matrix } from "@svgdotjs/svg.js";
+
+// Группы «снимков» рамок, закреплённых на изображении.
+// IndexPage двигает их вместе с картинкой (зум/поворот/перетаскивание).
+export const snapshotOverlayEntries = new Set();
 
 function addMouseOverToPoint(point) {
   point.on("mouseover", () =>
@@ -195,6 +200,11 @@ function constrainVerticalPointMovement(
  * Клик переключает om.settings.pinToImage[frameKey] — когда замок закрыт,
  * точки этой рамки следуют за перемещением изображения. Рамки Left и Dorsal
  * переключаются независимо (frameKey: "left" | "dorsal").
+ *
+ * options (необязательный):
+ *   points         — { role: svgElement } измеряемые точки рамки (для снимков)
+ *   updateMeasures — функция пересчёта измерений после восстановления рамки
+ *   show           — функция показа рамки (иконка карандашика)
  */
 function addLockToggle(
   draw,
@@ -204,6 +214,7 @@ function addLockToggle(
   bus,
   frameResizer,
   frameKey,
+  options = {},
 ) {
   const SIZE = 28;
   const isPinned = () => Boolean(om.value.settings.pinToImage?.[frameKey]);
@@ -256,6 +267,196 @@ function addLockToggle(
     "transition:opacity .2s;cursor:pointer;user-select:none;";
   resetFo.node.appendChild(resetIcon);
 
+  // зелёная иконка «Добавить запись» — справа от замочка. Видна только
+  // когда задан масштаб. Клик добавляет запись в таблицу измерений и
+  // фиксирует копию рамки с точками на изображении (с карандашиком).
+  const addFo = draw.foreignObject(SIZE, SIZE);
+  const addIcon = document.createElement("i");
+  addIcon.className = "material-icons";
+  addIcon.textContent = "add_circle";
+  addIcon.style.cssText =
+    "font-size:20px;line-height:28px;display:block;text-align:center;" +
+    "color:#2e7d32;text-shadow:0 0 4px rgba(255,255,255,0.9);opacity:1;" +
+    "transition:opacity .2s;cursor:pointer;user-select:none;";
+  addFo.node.appendChild(addIcon);
+
+  // снимки записей: record_no -> { state, g, entry }
+  const snapshots = new Map();
+  // активная запись, с которой сейчас связана рамка
+  let activeRecordNo = null;
+  // восстановленное состояние после карандашика — для dragmove, если GDF удалён
+  let anchorState = null;
+
+  // текущее состояние рамки (для восстановления карандашиком)
+  const captureState = () => {
+    const bf = baseFrame.attr(["x", "y", "width", "height"]);
+    const points = {};
+    if (options.points) {
+      Object.entries(options.points).forEach(([role, el]) => {
+        points[role] = { cx: el.attr("cx"), cy: el.attr("cy") };
+      });
+    }
+    return {
+      matrix: mobjects.matrixify().toArray(),
+      frame: {
+        x: Number(bf.x),
+        y: Number(bf.y),
+        width: Number(bf.width),
+        height: Number(bf.height),
+      },
+      points,
+      label: om.value.label,
+    };
+  };
+
+  // восстановить основную рамку в состояние снимка
+  const restoreSnapshot = (state) => {
+    if (!state) return;
+    mobjects.transform(new Matrix(state.matrix));
+    baseFrame.attr(state.frame);
+    if (frameResizer) {
+      frameResizer.attr({
+        x: state.frame.x + state.frame.width,
+        y: state.frame.y + state.frame.height,
+      });
+    }
+    if (options.points && state.points) {
+      Object.entries(state.points).forEach(([role, p]) => {
+        const el = options.points[role];
+        if (el) {
+          el.attr({ cx: p.cx, cy: p.cy });
+          // принудительно пересчитать все линии (тангенсные, к углам, меры)
+          el.fire("dragmove");
+        }
+      });
+    }
+    if (options.show) options.show(true);
+    if (options.updateMeasures) options.updateMeasures();
+  };
+
+  // статичная копия рамки с точками, закреплённая на изображении + карандашик
+  const createSnapshotVisual = (recordNo, state) => {
+    removeSnapshot(recordNo);
+    const g = draw.group();
+    const rect = draw
+      .rect(state.frame.width, state.frame.height)
+      .move(state.frame.x, state.frame.y)
+      .fill({ color: "#2e7d32", opacity: 0.04 })
+      .stroke({
+        color: "#2e7d32",
+        width: 1.5 * getLineScale(),
+        dasharray: "4,3",
+      });
+    g.add(rect);
+    Object.values(state.points || {}).forEach((p) => {
+      if (p.cx === undefined) return;
+      const dot = draw
+        .circle(6)
+        .center(p.cx, p.cy)
+        .fill("#2e7d32")
+        .attr("opacity", 0.85);
+      g.add(dot);
+    });
+    // подпись записи — по центру Green Dashed Frame
+    if (state.label) {
+      const gdfLabel = draw
+        .text(state.label)
+        .font({ size: 12, family: "Arial" })
+        .fill("#2e7d32")
+        .attr({
+          "text-anchor": "middle",
+          "dominant-baseline": "central",
+          x: state.frame.x + state.frame.width / 2,
+          y: state.frame.y + state.frame.height / 2,
+        });
+      g.add(gdfLabel);
+    }
+    g.transform(new Matrix(state.matrix));
+
+    const pencilFo = draw.foreignObject(SIZE, SIZE);
+    const pencilIcon = document.createElement("i");
+    pencilIcon.className = "material-icons";
+    pencilIcon.textContent = "edit";
+    pencilIcon.style.cssText =
+      "font-size:16px;line-height:22px;display:block;text-align:center;" +
+      "color:#1565c0;text-shadow:0 0 4px rgba(255,255,255,0.95);opacity:0.95;" +
+      "cursor:pointer;user-select:none;background:rgba(255,255,255,0.7);" +
+      "border-radius:50%;";
+    pencilIcon.title = `Редактировать запись № ${recordNo}`;
+    pencilFo.node.appendChild(pencilIcon);
+    pencilFo.attr({
+      x: state.frame.x + state.frame.width - SIZE,
+      y: state.frame.y - SIZE,
+      width: SIZE,
+      height: SIZE,
+    });
+    g.add(pencilFo);
+
+    // клик по карандашику — рамка встаёт на место снимка (режим правки записи)
+    pencilIcon.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const snap = snapshots.get(recordNo);
+      if (!snap) return;
+      restoreSnapshot(snap.state);
+      removeSnapshot(recordNo); // GDF исчезает
+      anchorState = snap.state; // запоминаем для dragmove
+      activeRecordNo = recordNo; // следующий клик плюса → обновление
+      bus.emit("record-selected", { frame: frameKey, recordNo });
+    });
+    pencilIcon.addEventListener("mousedown", (e) => e.stopPropagation());
+
+    const entry = { frame: frameKey, group: g };
+    snapshotOverlayEntries.add(entry);
+    snapshots.set(recordNo, { state, g, entry });
+    // основная рамка всегда поверх снимка
+    mobjects.front();
+  };
+
+  const removeSnapshot = (recordNo) => {
+    const snap = snapshots.get(recordNo);
+    if (!snap) return;
+    snapshots.delete(recordNo);
+    if (snap.entry) snapshotOverlayEntries.delete(snap.entry);
+    if (snap.g) snap.g.remove();
+  };
+
+  // клик по зелёной иконке: добавить/обновить запись и закрепить снимок
+  addIcon.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!om.value.settings.scalebar_ready) return;
+    if (activeRecordNo === null) {
+      // новая запись в таблице измерений
+      bus.emit("add-record-request", { frame: frameKey });
+      createSnapshotVisual(om.value.record_no, captureState());
+      // разблокировать замок, если был включён — рамка остаётся свободной
+      if (isPinned()) {
+        om.value.settings.pinToImage[frameKey] = false;
+        updateIcon(false);
+        applyPinState(false);
+        bus.emit("pin-image-toggled", { frame: frameKey, value: false });
+        position();
+      }
+    } else {
+      // обновить активную запись текущими измерениями
+      const recordNo = activeRecordNo;
+      activeRecordNo = null; // вернуться в режим «добавить»
+      bus.emit("update-record-request", { frame: frameKey, recordNo });
+      createSnapshotVisual(recordNo, captureState());
+    }
+  });
+  addIcon.addEventListener("mousedown", (e) => e.stopPropagation());
+  addIcon.addEventListener("mouseenter", () => { addIcon.style.opacity = "0.85"; });
+  addIcon.addEventListener("mouseleave", () => { addIcon.style.opacity = "1"; });
+
+  // удаление записи из таблицы убирает и снимок
+  bus.on("record-deleted", ({ recordNo }) => {
+    removeSnapshot(recordNo);
+    if (activeRecordNo === recordNo) {
+      activeRecordNo = null;
+      anchorState = null;
+    }
+  });
+
   // подложка под текст: размеры пересчитываются после смены текста и зума,
   // чтобы рамка оставалась постоянной на экране
   const measureLabel = () => {
@@ -296,7 +497,7 @@ function addLockToggle(
   bus.on("label-changed", updateLabel);
   bus.on("measure-updated", updateLabel);
 
-  // текущая позиция + видимость иконки сброса
+  // текущая позиция + видимость иконок
   const position = () => {
     const f = baseFrame.attr(["x", "y", "width", "height"]);
     const cx = Number(f.x) + Number(f.width) / 2;
@@ -311,7 +512,7 @@ function addLockToggle(
     const w = SIZE * inv;
     const h = SIZE * inv;
 
-    // замочек левее центра, иконка сброса правее
+    // замочек левее центра, иконка сброса правее, зелёная «запись» ещё правее
     fo.attr({
       x: 0,
       y: 0,
@@ -326,6 +527,13 @@ function addLockToggle(
       height: SIZE,
       transform: `translate(${cx} ${cy - h / 2}) scale(${inv})`,
     });
+    addFo.attr({
+      x: 0,
+      y: 0,
+      width: SIZE,
+      height: SIZE,
+      transform: `translate(${cx + w} ${cy - h / 2}) scale(${inv})`,
+    });
 
     // текстовая подпись — центрирована над замочком
     labelEl.attr("x", cx - w / 2);
@@ -338,6 +546,11 @@ function addLockToggle(
     const visible = rotated;
     resetFo.attr("opacity", visible ? "1" : "0");
     resetFo.node.style.pointerEvents = visible ? "auto" : "none";
+
+    // зелёная иконка «Добавить запись» — только при заданном масштабе
+    const scaleReady = Boolean(om.value.settings.scalebar_ready);
+    addFo.attr("opacity", scaleReady ? "1" : "0");
+    addFo.node.style.pointerEvents = scaleReady ? "auto" : "none";
   };
   applyPinState(isPinned());
 
@@ -380,6 +593,23 @@ function addLockToggle(
   // рамку уже сдвигает svg.draggable, а IndexPage по этому событию
   // двигает изображение и остальные рамки с включённым замком.
   mobjects.on("dragmove", (event) => {
+    // Если рамка была закреплена за записью, а теперь её перетащили
+    // в другое место — возвращаем режим «добавить» (зелёный плюс).
+    if (activeRecordNo !== null) {
+      const snap = snapshots.get(activeRecordNo);
+      const cur = mobjects.matrixify();
+      let ref = null;
+      if (snap) {
+        ref = snap.g.matrixify();
+      } else if (anchorState) {
+        // GDF удалён карандашиком; сравниваем с восстановленной матрицей
+        ref = new Matrix(anchorState.matrix);
+      }
+      if (ref && (Math.abs(cur.e - ref.e) > 6 || Math.abs(cur.f - ref.f) > 6)) {
+        activeRecordNo = null;
+        anchorState = null;
+      }
+    }
     if (!isPinned()) return;
     const { dx, dy } = event.detail;
     if (!dx && !dy) return;
@@ -398,11 +628,11 @@ function addLockToggle(
   // позицию + видимость иконки сброса
   bus.on("overlays-transformed", () => position());
 
-  mobjects.add(fo).add(resetFo).add(labelBg).add(labelEl);
+  mobjects.add(fo).add(resetFo).add(addFo).add(labelBg).add(labelEl);
   updateLabel();
   position();
 
-  return { field: fo, resetField: resetFo, position };
+  return { field: fo, resetField: resetFo, position, removeSnapshot };
 }
 
 export {

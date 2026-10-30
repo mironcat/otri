@@ -644,6 +644,20 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
     bus,
     frameResizer,
     "dorsal",
+    {
+      points: {
+        a: aPMC,
+        p: pPMC,
+        d: rPMC,
+        v: lPMC,
+        t_ad: adTangentPoint,
+        t_pd: pdTangentPoint,
+        t_av: avTangentPoint,
+        t_pv: pvTangentPoint,
+      },
+      updateMeasures,
+      show,
+    },
   );
   return {
     addMeasureObjects,

@@ -1,25 +1,22 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div v-if="om" class="description-content">
-    <p
-      v-if="om.record_no !== undefined && om.record_no !== null"
-      class="description-record"
-    >
+    <p v-if="om.record_no !== undefined && om.record_no !== null" class="description-record">
       <strong>Запись № {{ om.record_no }}</strong> —
       {{ om.label || "без метки" }}
       <span v-if="om.filename">({{ om.filename }})</span>
     </p>
 
     <h4>Общее описание</h4>
-    <p v-if="om.lateral_side">
-      Латеральная проекция: по длине раковины —
-      <strong>{{ shellLengthType || "—" }}</strong> (L = {{ fmt(om.length) }}),
-      по степени удлинённости — <strong>{{ elongation || "—" }}</strong>
-      (L/H = {{ ratio(om.length, om.height) }}),
-      <strong>{{ plenateType || "—" }}</strong>
-      (AD-l/PD-l = {{ ratio(om.ad?.hc, om.pd?.hc) }}).
-    </p>
     <p v-if="om.lateral_side">Сторона: <strong>{{ side }}</strong>.</p>
+    <div>
+      Раковина в латеральной проекции ?????, {{ shellLengthType || "—" }} (L = {{ fmt(om.length) + 'μ' }}), умеренно
+      удлиненная (L/H={{
+        ratio(om.length, om.height) }}), {{ plenateType || "—" }} (AD-l/PD-l = {{ ratio(om.ad?.hc, om.pd?.hc) }}).
+      Максимальная выпуклость в поперечном срезе располагается в средней части раковины. Замочный
+      край слабовыпуклый, сильно наклонен к переднему концу.
+    </div>
+
     <p v-if="om.dorsal_side">
       Дорсальная проекция: по длине раковины —
       <strong>{{ shellLengthType || "—" }}</strong> (L = {{ fmt(om.length_dorsal) }}),
@@ -28,7 +25,7 @@
       полнота — <strong>{{ fullness }}</strong>.
     </p>
 
-    <template v-if="om.lateral_side">
+    <!-- <template v-if="om.lateral_side">
       <h4>Латеральная сторона</h4>
       <p v-for="arc in lateralArcs" :key="arc.key">
         {{ arc.name }}
@@ -47,7 +44,7 @@
       </p>
     </template>
 
-    <template v-if="om.dorsal_side">
+<template v-if="om.dorsal_side">
       <h4>Дорсальная сторона</h4>
       <p v-for="arc in dorsalArcs" :key="arc.key">
         {{ arc.name }}
@@ -58,7 +55,7 @@
         <strong>{{ arc.position || "—" }}</strong>
         ({{ arc.short }}-α = {{ degrees(arc.alfa) }}).
       </p>
-    </template>
+    </template> -->
   </div>
   <div v-else class="description-empty">
     Нет данных для описания. Добавьте запись в таблицу или выберите её.
@@ -153,7 +150,7 @@ const fullness = computed(() =>
 
 const fmt = (value) => {
   const number = Number(value);
-  return Number.isFinite(number) ? number.toFixed(1) : "—";
+  return Number.isFinite(number) ? number.toFixed() : "—";
 };
 
 const ratio = (a, b) => {
