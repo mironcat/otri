@@ -22,7 +22,7 @@
     "release:win": "npm run clean && npm run package:win"
   },
   "dependencies": {
-    "@quasar/cli": "^4.0.0",
+    "@quasar/cli": "^5.0.9",
     "@quasar/extras": "^1.18.0",
     "@svgdotjs/svg.draggable.js": "^3.0.3",
     "@svgdotjs/svg.js": "^3.2.0",
