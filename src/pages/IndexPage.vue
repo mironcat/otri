@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <q-page class="column canvas-page">
     <div class="row q-ml-md q-mt-md">
       <div class="q-gutter-sm">
@@ -98,7 +98,8 @@
             <q-space />
             <q-select v-model="selectedRecordNo" :options="recordOptions" option-value="record_no"
               option-label="recordLabel" emit-value map-options dense outlined options-dense label="Запись"
-              :disable="recordOptions.length === 0" class="record-select" />
+              :disable="recordOptions.length === 0" class="record-select"
+              @update:model-value="onRecordSelected" />
           </div>
           <div class="description-body">
             <Description :om="selectedMeasurements" />
@@ -231,7 +232,7 @@ const showTables = ref(false);
 // Видимость текстового описания (правая половина нижней панели)
 const showDescription = ref(true);
 
-import { watch, inject, computed } from "vue";
+import { watch, inject, computed, nextTick } from "vue";
 import { exportFile } from "quasar";
 import "@svgdotjs/svg.draggable.js";
 import { Matrix, Point } from "@svgdotjs/svg.js";
@@ -354,7 +355,23 @@ const selectedMeasurements = computed(() => {
 const onRowClick = (evt, row) => {
   if (row?.record_no === undefined || row?.record_no === null) return;
   selectedRecordNo.value = row.record_no;
+  // активируем сохранённую геометрию записи для редактирования
+  activateRecord(row.record_no);
   showDescription.value = true;
+};
+
+// Выбор записи в списке описания тоже активирует её наборы
+const onRecordSelected = (recordNo) => {
+  if (recordNo === undefined || recordNo === null) return;
+  activateRecord(recordNo);
+};
+
+// Поиск индекса строки в массиве rows по номеру записи
+const findRowIdx = (arr, recordNo) => {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    if (arr[i].record_no === recordNo) return i;
+  }
+  return -1;
 };
 
 // Подсветка строки выбранной записи
@@ -402,6 +419,288 @@ let lso = leftSideObjects(draw, om, scales, bus);
 let dso = DorsalSideObjects(draw, om, scales, bus);
 let concave_lso = concaveLeftSideObjects(draw, om, scales, bus);
 
+// --- Отдельный набор baseFrame для каждой записи ---------------------------
+// При добавлении записи геометрия текущих наборов сохраняется, а на холсте
+// остаётся замороженная зелёная копия. Выбранная в таблице запись снова
+// становится цветной и доступной для редактирования.
+const recordFrames = new Map(); // record_no -> { left, concave, dorsal, ui }
+const frozenGroups = new Map(); // record_no -> { left, concave, dorsal }
+let activeRecordNo = null;
+// подавление синхронизации Left/Concave при программном восстановлении записи
+let skipConcaveSync = false;
+
+// Наборы, которыми можно управлять. Ссылки читаем из переменных, потому что
+// после загрузки нового файла они пересоздаются.
+const overlayEntries = () => [
+  ["left", lso],
+  ["concave", concave_lso],
+  ["dorsal", dso],
+];
+
+// Матрица изображения: от координат содержимого картинки к координатам холста.
+// Учитывает и трансформацию группы (зум/поворот), и локальный сдвиг
+// содержимого (перетаскивание картинки делает dmove её дочерних элементов).
+// Геометрию записей храним относительно неё, чтобы замороженные рамки оставались
+// привязанными к ракушке при зуме/повороте/сдвиге.
+const imageMatrix = () => {
+  const b = mainimage.bbox();
+  return mainimage
+    .matrixify()
+    .multiply(new Matrix().translate(b.x, b.y));
+};
+
+// Снимок геометрии одного набора. Трансформация хранится относительно
+// изображения, координаты рамки и точек — локальные для группы.
+const captureSet = (obj) => {
+  if (!obj || !obj.mobjects || !obj.baseFrame) return null;
+  const rel = imageMatrix().inverse().multiply(obj.mobjects.matrixify());
+  const points = {};
+  Object.entries(obj.points || {}).forEach(([role, el]) => {
+    if (!el) return;
+    points[role] = {
+      cx: Number(el.attr("cx")),
+      cy: Number(el.attr("cy")),
+    };
+  });
+  return {
+    transform: [rel.a, rel.b, rel.c, rel.d, rel.e, rel.f],
+    baseFrame: obj.baseFrame.attr(["x", "y", "width", "height"]),
+    frameResizer: obj.frameResizer
+      ? obj.frameResizer.attr(["x", "y"])
+      : null,
+    points,
+  };
+};
+
+// Настройки интерфейса, которые влияют на отображение и расчёт записи
+const captureUI = () => ({
+  side: om.value.side,
+  concave_vs: om.value.concave_vs,
+  lateral_side: om.value.lateral_side,
+  dorsal_side: om.value.dorsal_side,
+  half: om.value.half,
+  fullness: om.value.fullness,
+  label: om.value.label,
+});
+
+// Вернуть геометрию набора из снимка (трансформация пересчитывается
+// относительно текущего положения изображения)
+const restoreSet = (obj, state) => {
+  if (!obj || !state) return;
+  // attr() применяет матрицу синхронно (transform() откладывает её до
+  // следующего requestAnimationFrame, и updateMeasures ниже прочитал бы старую)
+  obj.mobjects.attr(
+    "transform",
+    imageMatrix().multiply(new Matrix(state.transform)),
+  );
+  if (state.baseFrame) obj.baseFrame.attr(state.baseFrame);
+  if (state.frameResizer && obj.frameResizer) {
+    obj.frameResizer.attr(state.frameResizer);
+  }
+  Object.entries(state.points || {}).forEach(([role, p]) => {
+    const el = obj.points ? obj.points[role] : null;
+    if (el) el.attr({ cx: p.cx, cy: p.cy });
+  });
+  // пересчитать зависимости (линии к углам, кресты, меры)
+  if (obj.refreshPoints) obj.refreshPoints();
+  if (obj.updateMeasures) obj.updateMeasures();
+};
+
+// Включить сохранённую запись: режим, видимость сторон и геометрия наборов
+const applyRecord = (rec) => {
+  if (!rec || !rec.ui) return;
+  const ui = rec.ui;
+
+  // восстановление режима не должно копировать точки из другого режима
+  skipConcaveSync = true;
+  om.value.concave_vs = ui.concave_vs;
+  om.value.side = ui.side;
+  om.value.lateral_side = ui.lateral_side;
+  om.value.dorsal_side = ui.dorsal_side;
+  om.value.half = ui.half;
+  om.value.fullness = ui.fullness;
+  om.value.label = ui.label;
+  nextTick(() => {
+    skipConcaveSync = false;
+  });
+
+  bus.emit("side-change", ui.side === "right" ? "gray" : "blue");
+  bus.emit("lateral-show", ui.lateral_side && !ui.concave_vs);
+  bus.emit("concave-vs", ui.lateral_side && ui.concave_vs);
+  bus.emit("dorsal-show", ui.dorsal_side);
+
+  // Порядок важен: активный латеральный режим восстанавливаем последним,
+  // чтобы общие значения (om.length/height) взялись из видимого набора.
+  if (ui.concave_vs) {
+    if (rec.left) restoreSet(lso, rec.left);
+    if (rec.concave) restoreSet(concave_lso, rec.concave);
+  } else {
+    if (rec.concave) restoreSet(concave_lso, rec.concave);
+    if (rec.left) restoreSet(lso, rec.left);
+  }
+  if (rec.dorsal) restoreSet(dso, rec.dorsal);
+  // после смены трансформации групп пересчитываем позицию/масштаб иконок
+  bus.emit("overlays-transformed");
+};
+
+// Убрать интерактивные элементы из замороженной копии (иконки, ручку размера).
+// Дочерние элементы могут быть как группами, так и листьями (circle/path),
+// поэтому рекурсия идёт только по контейнерам.
+const stripFrozenHelpers = (el) => {
+  if (!el || typeof el.children !== "function") return;
+  el.children().forEach((child) => {
+    const tag = child.node && String(child.node.tagName).toLowerCase();
+    if (tag === "foreignobject" || child.hasClass("ui-resizer")) {
+      child.remove();
+      return;
+    }
+    stripFrozenHelpers(child);
+  });
+};
+
+// Замороженная некликабельная копия набора, нарисованная под активным набором.
+// Рамка ярко-зелёная (#00e676) — видна на тёмном и сером фоне.
+// Остальная геометрия — приглушённые тёмные линии, читаемые на любом фоне.
+const FROZEN_FRAME_COLOR = "#00e676";
+const FROZEN_LINE_COLOR = "#333";
+const FROZEN_FILL_COLOR = "#00e676";
+
+const colorizeFrozenElement = (el) => {
+  const tag = el.node && String(el.node.tagName).toLowerCase();
+  if (tag === "rect") {
+    el.attr("stroke", FROZEN_FRAME_COLOR);
+    return;
+  }
+  if (tag === "text") {
+    el.attr("fill", FROZEN_LINE_COLOR);
+    return;
+  }
+  if (tag === "circle") {
+    el.attr("fill", FROZEN_FILL_COLOR);
+    el.attr("stroke", FROZEN_LINE_COLOR);
+    el.attr("stroke-width", "1");
+    return;
+  }
+  // line, polyline
+  el.attr("stroke", FROZEN_LINE_COLOR);
+};
+
+const makeFrozenClone = (obj, recordNo, key) => {
+  if (!obj || !obj.mobjects) return null;
+  const clone = obj.mobjects.clone();
+  clone.attr({ id: `frozen-${key}-${recordNo}`, "data-record": recordNo });
+  stripFrozenHelpers(clone);
+  clone.attr({ "pointer-events": "none", opacity: "0.75", "aria-hidden": "true" });
+  obj.mobjects.before(clone);
+  // перекрасить после вставки: find() работает по дереву DOM
+  clone.find("rect, circle, line, polyline, text").forEach(colorizeFrozenElement);
+
+  // Полупрозрачная зелёная иконка карандаша по центру замороженной рамки —
+  // клик активирует запись для редактирования (как выбор строки в таблице).
+  const bf = obj.baseFrame.attr(["x", "y", "width", "height"]);
+  const cx = Number(bf.x) + Number(bf.width) / 2;
+  const cy = Number(bf.y) + Number(bf.height) / 2;
+
+  const editFo = draw.foreignObject(24, 24);
+  const editIcon = document.createElement("i");
+  editIcon.className = "material-icons";
+  editIcon.textContent = "edit";
+  editIcon.title = "Редактировать запись";
+  editIcon.style.cssText =
+    "font-size:20px;line-height:24px;display:block;width:24px;height:24px;" +
+    "text-align:center;color:rgba(0,230,118,0.85);" +
+    "text-shadow:0 0 4px rgba(0,0,0,0.5);cursor:pointer;user-select:none;" +
+    "transition:transform .15s,opacity .2s;";
+  editFo.node.appendChild(editIcon);
+  editFo.attr({
+    x: cx - 12,
+    y: cy - 12,
+    width: 24,
+    height: 24,
+    "pointer-events": "auto",
+  });
+  editIcon.addEventListener("click", (e) => {
+    e.stopPropagation();
+    activateRecord(recordNo);
+  });
+  editIcon.addEventListener("mouseenter", () => {
+    editIcon.style.opacity = "1";
+    editIcon.style.transform = "scale(1.12)";
+  });
+  editIcon.addEventListener("mouseleave", () => {
+    editIcon.style.opacity = "";
+    editIcon.style.transform = "";
+  });
+  clone.add(editFo);
+
+  return clone;
+};
+
+const removeFrozenRecord = (recordNo) => {
+  const groups = frozenGroups.get(recordNo);
+  if (!groups) return;
+  Object.values(groups).forEach((g) => g && g.remove());
+  frozenGroups.delete(recordNo);
+};
+
+// Заморозить наборы записи: контрастные копии текущей геометрии
+const freezeRecord = (recordNo) => {
+  const rec = recordFrames.get(recordNo);
+  if (!rec) return;
+  removeFrozenRecord(recordNo);
+  const groups = {};
+  overlayEntries().forEach(([key, obj]) => {
+    if (!obj || !rec[key]) return;
+    groups[key] = makeFrozenClone(obj, recordNo, key);
+  });
+  frozenGroups.set(recordNo, groups);
+};
+
+// Пересчитать положение замороженных копий после трансформации изображения:
+// каждая копия = текущая матрица изображения × сохранённая относительная
+const refreshFrozenTransforms = () => {
+  if (!frozenGroups.size) return;
+  const mimg = imageMatrix();
+  frozenGroups.forEach((groups, recordNo) => {
+    const rec = recordFrames.get(recordNo);
+    if (!rec) return;
+    Object.entries(groups).forEach(([key, g]) => {
+      const state = rec[key];
+      if (!g || !state) return;
+      g.attr(
+        "transform",
+        mimg.clone().multiply(new Matrix(state.transform)),
+      );
+    });
+  });
+};
+
+// Показать/скрыть замороженную копию записи (0 — скрыть, 0.75 — показать)
+const setFrozenVisibility = (recordNo, opacity) => {
+  const groups = frozenGroups.get(recordNo);
+  if (!groups) return;
+  Object.values(groups).forEach((g) => {
+    if (g) g.attr("opacity", String(opacity));
+  });
+};
+
+// Сделать запись активной: прячем её замороженную копию (зелёная рамка не мешает),
+// а предыдущую активную запись (если была) — показываем снова.
+const activateRecord = (recordNo) => {
+  const rec = recordFrames.get(recordNo);
+  if (!rec) return;
+  if (activeRecordNo === recordNo) return;
+  // показать frozenClone предыдущей активной записи
+  if (activeRecordNo != null) {
+    setFrozenVisibility(activeRecordNo, "0.75");
+  }
+  applyRecord(rec);
+  activeRecordNo = recordNo;
+  // скрыть frozenClone редактируемой записи
+  setFrozenVisibility(recordNo, "0");
+  bus.emit("record-edit-state", { editing: true });
+};
+
 // --- Синхронизация похожих точек между режимами измерения ------------------
 // Совпадающие роли: PMC-точки a/p/d (сверху-слева, справа, снизу-сверху)
 // и тангенсные точки ad/pd/av/pv. При переключении Concave ventral margin
@@ -448,6 +747,8 @@ const syncOverlays = (active, target) => {
 watch(
   () => om.value.concave_vs,
   () => {
+    // при восстановлении записи точки уже взяты из снимка — не копируем их
+    if (skipConcaveSync) return;
     if (om.value.concave_vs) syncOverlays(lso, concave_lso);
     else syncOverlays(concave_lso, lso);
   },
@@ -512,10 +813,135 @@ onBeforeUnmount(() => {
     canvasResizeObserver.disconnect();
     canvasResizeObserver = null;
   }
+  bus.off("add-record", handleRecordAction);
 });
 
+// Обновить существующую запись новыми измерениями и геометрией
+const updateRecord = (recordNo) => {
+  if (!recordNo) return;
+  const rec = recordFrames.get(recordNo);
+  if (!rec) return;
+
+  // Снимок геометрии наборов, относящихся к обновляемой записи
+  const snapshots = {};
+  overlayEntries().forEach(([key, obj]) => {
+    if (key === "dorsal" && !om.value.dorsal_side) return;
+    if (key !== "dorsal" && !om.value.lateral_side) return;
+    const state = captureSet(obj);
+    if (state) snapshots[key] = state;
+  });
+  snapshots.ui = captureUI();
+  recordFrames.set(recordNo, snapshots);
+
+  // перезаморозить: удалить старую копию, создать новую
+  freezeRecord(recordNo);
+  
+  // разомкнуть замки, если были включены
+  if (om.value.settings.pinToImage.left || om.value.settings.pinToImage.dorsal) {
+    om.value.settings.pinToImage.left = false;
+    om.value.settings.pinToImage.dorsal = false;
+    bus.emit("pin-image-toggled", { frame: "left", value: false });
+    bus.emit("pin-image-toggled", { frame: "dorsal", value: false });
+  }
+  
+  activeRecordNo = null;
+
+  // Сдвигаем активные наборы, чтобы замороженная копия была видна под ними
+  overlayEntries().forEach(([key, obj]) => {
+    if (!snapshots[key] || !obj || !obj.mobjects) return;
+    const g = obj.mobjects;
+    g.attr("transform", g.matrixify().translate(24, 24));
+  });
+
+  // Обновить строку в таблице новыми измерениями
+  const rawdata = { ...JSON.parse(JSON.stringify(om.value)) };
+  const basedata = (({ record_no, label, filename, side }) => ({
+    record_no,
+    label,
+    filename,
+  }))(rawdata);
+  basedata.record_no = recordNo;
+
+  if (om.value.lateral_side) {
+    const lateraldata = (({ length, height, ad, pd, av, pv, v, side }) => ({
+      side,
+      length,
+      height,
+      ad_alfa: ad.alfa, ad_hc: ad.hc, ad_vc: ad.vc, ad_ln: ad.ln, ad_sln: ad.sln,
+      pd_alfa: pd.alfa, pd_hc: pd.hc, pd_vc: pd.vc, pd_ln: pd.ln, pd_sln: pd.sln,
+      av_alfa: av.alfa, av_hc: av.hc, av_vc: av.vc, av_ln: av.ln, av_sln: av.sln,
+      pv_alfa: pv.alfa, pv_hc: pv.hc, pv_vc: pv.vc, pv_ln: pv.ln, pv_sln: pv.sln,
+      v_lv: v.lv, v_lvl: v.lvl, v_dv: v.dv,
+    }))(rawdata);
+    const idx = findRowIdx(rows.value.lateral, recordNo);
+    if (idx >= 0) rows.value.lateral[idx] = Object.assign({}, basedata, lateraldata);
+  }
+  if (om.value.dorsal_side) {
+    const dorsaldata = (({
+      fullness, length_dorsal, width, al, pl, ar, pr,
+    }) => ({
+      length_dorsal, width,
+      fullness,
+      ar_alfa: ar.alfa, ar_hc: ar.hc, ar_vc: ar.vc, ar_ln: ar.ln, ar_sln: ar.sln,
+      pr_alfa: pr.alfa, pr_hc: pr.hc, pr_vc: pr.vc, pr_ln: pr.ln, pr_sln: pr.sln,
+      al_alfa: al.alfa, al_hc: al.hc, al_vc: al.vc, al_ln: al.ln, al_sln: al.sln,
+      pl_alfa: pl.alfa, pl_hc: pl.hc, pl_vc: pl.vc, pl_ln: pl.ln, pl_sln: pl.sln,
+    }))(rawdata);
+    const idx = findRowIdx(rows.value.dorsal, recordNo);
+    if (idx >= 0) rows.value.dorsal[idx] = Object.assign({}, basedata, dorsaldata);
+  }
+
+  selectedRecordNo.value = recordNo;
+  bus.emit("record-edit-state", { editing: false });
+};
+
 const addRecord = () => {
+  if (!om.value.settings.scalebar_ready) {
+    $q.notify({
+      message: "Сначала задайте масштаб",
+      color: "warning",
+      icon: "straighten",
+    });
+    return;
+  }
+  if (!om.value.lateral_side && !om.value.dorsal_side) {
+    $q.notify({
+      message: "Выберите латеральную или дорсальную сторону",
+      color: "warning",
+      icon: "warning",
+    });
+    return;
+  }
+
+  // Снимок геометрии наборов, относящихся к сохраняемой записи
+  const snapshots = {};
+  overlayEntries().forEach(([key, obj]) => {
+    if (key === "dorsal" && !om.value.dorsal_side) return;
+    if (key !== "dorsal" && !om.value.lateral_side) return;
+    const state = captureSet(obj);
+    if (state) snapshots[key] = state;
+  });
+  snapshots.ui = captureUI();
+
   om.value.record_no = om.value.record_no + 1;
+  const savedRecordNo = om.value.record_no;
+  recordFrames.set(savedRecordNo, snapshots);
+
+  // Текущий набор остаётся замороженной копией, следующий номер — для новой записи
+  freezeRecord(savedRecordNo);
+  activeRecordNo = null;
+
+  // Сдвигаем активные наборы, чтобы замороженная копия была видна под ними.
+  // Двигаем трансформацию группы (а не дочерние элементы): тогда при
+  // активации записи restoreSet вернёт снимок точно, без остаточного сдвига.
+  // Сдвигаем только сохранённые в этой записи наборы, чтобы скрытые в момент
+  // сохранения стороны не накапливали смещение от каждой новой записи.
+  overlayEntries().forEach(([key, obj]) => {
+    if (!snapshots[key] || !obj || !obj.mobjects) return;
+    const g = obj.mobjects;
+    g.attr("transform", g.matrixify().translate(24, 24));
+  });
+
   const rawdata = { ...JSON.parse(JSON.stringify(om.value)) };
   const basedata = (({ record_no, label, filename, side }) => ({
     record_no,
@@ -606,10 +1032,21 @@ const addRecord = () => {
   }
 
   // Сразу показываем описание только что сохранённой записи
-  if (om.value.lateral_side || om.value.dorsal_side) {
-    selectedRecordNo.value = om.value.record_no;
+  selectedRecordNo.value = savedRecordNo;
+  bus.emit("record-edit-state", { editing: false });
+};
+
+// Кнопка «+» или «save» на рамке — создаёт новую запись или обновляет активную
+const handleRecordAction = () => {
+  if (activeRecordNo != null) {
+    updateRecord(activeRecordNo);
+  } else {
+    addRecord();
   }
 };
+
+bus.on("add-record", handleRecordAction);
+
 const deleteRecord = (row) => {
   rows.value.lateral = rows.value.lateral.filter(
     (r) => r.record_no !== row.record_no
@@ -617,6 +1054,13 @@ const deleteRecord = (row) => {
   rows.value.dorsal = rows.value.dorsal.filter(
     (r) => r.record_no !== row.record_no
   );
+  // удаляем сохранённую геометрию и замороженную копию записи
+  removeFrozenRecord(row.record_no);
+  recordFrames.delete(row.record_no);
+  if (activeRecordNo === row.record_no) {
+    activeRecordNo = null;
+    bus.emit("record-edit-state", { editing: false });
+  }
 };
 const getFactor = () => {
   scales.value.factor =
@@ -665,22 +1109,25 @@ const moveGroupByScreenDelta = (group, sx, sy) => {
 const followZoom = (factor) => {
   if (factor === 1) return;
   const groups = pinnedGroups();
-  if (!groups.length) return;
-  const mimg = mainimage.matrixify();
-  const b = mainimage.bbox(); // локальный бокс содержимого картинки
-  const C = new Matrix().scaleO(
-    factor,
-    factor,
-    b.x + b.width / 2,
-    b.y + b.height / 2,
-  );
-  const G = mimg.clone().multiplyO(C).multiplyO(mimg.clone().inverseO());
-  groups.forEach((g) => {
-    const M = new Matrix(G).multiplyO(g.matrixify());
-    g.attr("transform", M);
-  });
-  // пересчитать позицию и масштаб иконок (замок/refresh)
-  bus.emit("overlays-transformed");
+  if (groups.length) {
+    const mimg = mainimage.matrixify();
+    const b = mainimage.bbox(); // локальный бокс содержимого картинки
+    const C = new Matrix().scaleO(
+      factor,
+      factor,
+      b.x + b.width / 2,
+      b.y + b.height / 2,
+    );
+    const G = mimg.clone().multiplyO(C).multiplyO(mimg.clone().inverseO());
+    groups.forEach((g) => {
+      const M = new Matrix(G).multiplyO(g.matrixify());
+      g.attr("transform", M);
+    });
+    // пересчитать позицию и масштаб иконок (замок/refresh)
+    bus.emit("overlays-transformed");
+  }
+  // замороженные копии записей всегда следуют за изображением
+  refreshFrozenTransforms();
 };
 
 const zoomIn = () => {
@@ -714,16 +1161,18 @@ const onWheelZoom = (event) => {
 const rotateImage = (angle) => {
   mainimage.rotate(angle);
   const groups = pinnedGroups();
-  if (!groups.length) return;
-  const mimg = mainimage.matrixify();
-  const b = mainimage.bbox();
-  const C = new Matrix().rotate(angle, b.cx, b.cy);
-  const G = mimg.clone().multiplyO(C).multiplyO(mimg.clone().inverseO());
-  groups.forEach((g) => {
-    g.attr("transform", new Matrix(G).multiplyO(g.matrixify()));
-  });
-  // обновить иконку сброса поворота в модулях
-  bus.emit("overlays-transformed");
+  if (groups.length) {
+    const mimg = mainimage.matrixify();
+    const b = mainimage.bbox();
+    const C = new Matrix().rotate(angle, b.cx, b.cy);
+    const G = mimg.clone().multiplyO(C).multiplyO(mimg.clone().inverseO());
+    groups.forEach((g) => {
+      g.attr("transform", new Matrix(G).multiplyO(g.matrixify()));
+    });
+    // обновить иконку сброса поворота в модулях
+    bus.emit("overlays-transformed");
+  }
+  refreshFrozenTransforms();
 };
 
 // Если у рамки включён замок, перетаскивание картинки сдвигает и её оверлеи
@@ -731,6 +1180,16 @@ const onImageDrag = function (event) {
   const { dx, dy } = event.detail;
   const d = localToScreenDelta(mainimage, dx, dy);
   pinnedGroups().forEach((g) => moveGroupByScreenDelta(g, d.x, d.y));
+  // драггер шлёт dragmove до фактического сдвига картинки, поэтому матрица
+  // изображения здесь ещё старая — двигаем замороженные копии на ту же экранную
+  // дельту, что и запертые наборы
+  frozenGroups.forEach((groups, recordNo) => {
+    if (!recordFrames.has(recordNo)) return;
+    Object.values(groups).forEach((g) => {
+      if (!g) return;
+      g.attr("transform", g.matrixify().translate(d.x, d.y));
+    });
+  });
 };
 mainimage.on("dragmove", onImageDrag);
 
@@ -747,6 +1206,8 @@ const onFrameDragged = ({ frame, group, dx, dy }) => {
       moveGroupByScreenDelta(t.group, d.x, d.y);
     }
   });
+  // замороженные копии привязаны к изображению, которое только что сдвинулось
+  refreshFrozenTransforms();
 };
 bus.on("frame-dragged", onFrameDragged);
 const addScaleBar = () => {
@@ -768,6 +1229,11 @@ let currentImageUrl = null;
 const fileUploaded = (file) => {
   if (!file) return;
   draw.clear();
+  // старые записи относились к прежнему изображению
+  recordFrames.clear();
+  frozenGroups.clear();
+  activeRecordNo = null;
+  bus.emit("record-edit-state", { editing: false });
   // Electron 32+ removed File.path, so use a blob URL instead of a local path
   if (currentImageUrl) URL.revokeObjectURL(currentImageUrl);
   currentImageUrl = URL.createObjectURL(file);

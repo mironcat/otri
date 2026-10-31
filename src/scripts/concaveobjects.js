@@ -555,6 +555,10 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   function updateMeasures() {
     lockIcon.position();
     updateAdditionalObjects();
+    sideLabel.attr({
+      x: baseFrame.attr("x"),
+      y: baseFrame.attr("y") - 17,
+    });
 
     om.value.length = baseFrame.attr("width") * scales.value.factor;
     om.value.height = baseFrame.attr("height") * scales.value.factor;

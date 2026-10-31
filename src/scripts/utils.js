@@ -195,6 +195,8 @@ function constrainVerticalPointMovement(
  * Клик переключает om.settings.pinToImage[frameKey] — когда замок закрыт,
  * точки этой рамки следуют за перемещением изображения. Рамки Left и Dorsal
  * переключаются независимо (frameKey: "left" | "dorsal").
+ * Справа от замка — заметная зелёная кнопка «+»: сохраняет запись и создаёт
+ * копию рамки для следующей. Она видна только после задания масштаба.
  */
 function addLockToggle(
   draw,
@@ -244,6 +246,35 @@ function addLockToggle(
     if (frameResizer) frameResizer.draggable(!pinned);
   };
 
+  // кнопка «+» справа от замочка: добавляет запись в таблицу,
+  // замораживает текущий набор baseFrame и создаёт копию для следующей записи.
+  // Крупная зелёная кнопка с белым крестом — заметнее полупрозрачного замка.
+  const addFo = draw.foreignObject(SIZE, SIZE);
+  const addIcon = document.createElement("i");
+  addIcon.className = "material-icons";
+  addIcon.textContent = "add";
+  addIcon.title = "Добавить запись и создать копию рамки";
+  addIcon.style.cssText =
+    "font-size:20px;line-height:24px;display:block;width:24px;height:24px;" +
+    "margin:2px;box-sizing:border-box;border-radius:50%;text-align:center;" +
+    "color:#fff;background:#127a35;box-shadow:0 1px 4px rgba(0,0,0,0.45);" +
+    "opacity:1;transition:opacity .2s,transform .15s;cursor:pointer;" +
+    "user-select:none;";
+  addFo.node.appendChild(addIcon);
+  addIcon.addEventListener("click", (e) => {
+    e.stopPropagation();
+    bus.emit("add-record");
+  });
+  addIcon.addEventListener("mousedown", (e) => e.stopPropagation());
+  addIcon.addEventListener("mouseenter", () => {
+    addIcon.style.opacity = "0.9";
+    addIcon.style.transform = "scale(1.08)";
+  });
+  addIcon.addEventListener("mouseleave", () => {
+    addIcon.style.opacity = "1";
+    addIcon.style.transform = "scale(1)";
+  });
+
   // иконка сброса поворота (refresh) — появляется справа от замочка,
   // когда рамка повёрнута; клик возвращает в горизонталь + размыкает замок
   const resetFo = draw.foreignObject(SIZE, SIZE);
@@ -285,6 +316,30 @@ function addLockToggle(
     });
   };
 
+  // «+» показываем только после того, как задан масштаб: без него запись
+  // сохранять нельзя, и кнопка не должна вводить в заблуждение
+  const syncAddVisibility = () => {
+    const ready = Boolean(om.value.settings.scalebar_ready);
+    addFo.attr("opacity", ready ? "1" : "0");
+    addFo.node.style.pointerEvents = ready ? "auto" : "none";
+  };
+
+  // При активации записи иконка «+» меняется на дискету «сохранить»,
+  // фон из зелёного становится оранжевым.
+  bus.on("record-edit-state", ({ editing }) => {
+    if (editing) {
+      addIcon.textContent = "save";
+      addIcon.title = "Обновить запись";
+      addIcon.style.backgroundColor = "#ff8f00";
+      addIcon.style.boxShadow = "0 1px 4px rgba(0,0,0,0.45)";
+    } else {
+      addIcon.textContent = "add";
+      addIcon.title = "Добавить запись и создать копию рамки";
+      addIcon.style.backgroundColor = "#127a35";
+      addIcon.style.boxShadow = "0 1px 4px rgba(0,0,0,0.45)";
+    }
+  });
+
   // подписка на обновление метки извне
   const updateLabel = () => {
     const txt = om.value.settings.scalebar_ready
@@ -292,6 +347,7 @@ function addLockToggle(
       : "масштаб не задан";
     labelEl.text(txt);
     layoutLabel();
+    syncAddVisibility();
   };
   bus.on("label-changed", updateLabel);
   bus.on("measure-updated", updateLabel);
@@ -311,7 +367,7 @@ function addLockToggle(
     const w = SIZE * inv;
     const h = SIZE * inv;
 
-    // замочек левее центра, иконка сброса правее
+    // замочек левее центра, «+» сразу справа от него, иконка сброса — ещё правее
     fo.attr({
       x: 0,
       y: 0,
@@ -319,13 +375,22 @@ function addLockToggle(
       height: SIZE,
       transform: `translate(${cx - w} ${cy - h / 2}) scale(${inv})`,
     });
-    resetFo.attr({
+    addFo.attr({
       x: 0,
       y: 0,
       width: SIZE,
       height: SIZE,
       transform: `translate(${cx} ${cy - h / 2}) scale(${inv})`,
     });
+    resetFo.attr({
+      x: 0,
+      y: 0,
+      width: SIZE,
+      height: SIZE,
+      transform: `translate(${cx + w} ${cy - h / 2}) scale(${inv})`,
+    });
+    // «+» доступен только при заданном масштабе
+    syncAddVisibility();
 
     // текстовая подпись — центрирована над замочком
     labelEl.attr("x", cx - w / 2);
@@ -398,11 +463,16 @@ function addLockToggle(
   // позицию + видимость иконки сброса
   bus.on("overlays-transformed", () => position());
 
-  mobjects.add(fo).add(resetFo).add(labelBg).add(labelEl);
+  mobjects.add(addFo).add(fo).add(resetFo).add(labelBg).add(labelEl);
   updateLabel();
   position();
 
-  return { field: fo, resetField: resetFo, position };
+  return {
+    field: fo,
+    addField: addFo,
+    resetField: resetFo,
+    position,
+  };
 }
 
 export {
