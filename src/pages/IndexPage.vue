@@ -239,7 +239,11 @@ import "@svgdotjs/svg.draggable.js";
 import { Matrix, Point } from "@svgdotjs/svg.js";
 import { onMounted, onBeforeUnmount, ref } from "vue";
 // import { lineTolineIntersectionPoint, getLengthByCoordinates, getAnglePoints } from '@/scripts/utils.js'
-import { initScalebar, getScalebarLength } from "@/scripts/scalebar.js";
+import {
+  initScalebar,
+  getScalebarLength,
+  positionScalebarBurned,
+} from "@/scripts/scalebar.js";
 import leftSideObjects from "@/scripts/leftsideobjects.js";
 import DorsalSideObjects from "@/scripts/dorsalobjects.js";
 import concaveLeftSideObjects from "@/scripts/concaveobjects.js";
@@ -846,6 +850,7 @@ function sizeCanvasToContainer() {
   const height = Math.max(canvasRef.value.clientHeight, 300);
   draw.size(width, height);
   resizeGuides(width, height);
+  positionScalebarBurned(draw, scalebar);
 }
 
 // Привести размеры точек/линий всех наборов к текущим множителям
@@ -1156,6 +1161,7 @@ const getFactor = () => {
   scales.value.factor =
     scales.value.length /
     (getScalebarLength(scalebar, scales) * scales.value.zoom);
+  positionScalebarBurned(draw, scalebar);
 };
 
 // Группы векторных оверлеев (точки, рамки, линии) с привязкой к рамке.
@@ -1303,14 +1309,93 @@ bus.on("frame-dragged", onFrameDragged);
 const addScaleBar = () => {
   om.value.settings.scalebar_ready = false;
   scalebar = initScalebar(scalebar, draw, scales.value);
+  positionScalebarBurned(draw, scalebar);
 };
 scalebar.click(function () {
   getFactor();
 });
+// Линейные поля результатов: при изменении масштаба их нужно пропорционально
+// пересчитать. Углы (alfa) и категориальные поля (side/fullness/label) не меняются.
+const LATERAL_LINEAR_FIELDS = [
+  "length",
+  "height",
+  "ad_hc",
+  "ad_vc",
+  "ad_ln",
+  "ad_sln",
+  "pd_hc",
+  "pd_vc",
+  "pd_ln",
+  "pd_sln",
+  "av_hc",
+  "av_vc",
+  "av_ln",
+  "av_sln",
+  "pv_hc",
+  "pv_vc",
+  "pv_ln",
+  "pv_sln",
+  "v_lv",
+  "v_lvl",
+  "v_dv",
+];
+const DORSAL_LINEAR_FIELDS = [
+  "length_dorsal",
+  "width",
+  "ar_hc",
+  "ar_vc",
+  "ar_ln",
+  "ar_sln",
+  "pr_hc",
+  "pr_vc",
+  "pr_ln",
+  "pr_sln",
+  "al_hc",
+  "al_vc",
+  "al_ln",
+  "al_sln",
+  "pl_hc",
+  "pl_vc",
+  "pl_ln",
+  "pl_sln",
+];
+
+// Пересчитать результаты, относящиеся к текущему файлу (по имени файла),
+// на коэффициент изменения масштаба. Записи других файлов не трогаем.
+const rescaleRowsForCurrentFile = (ratio) => {
+  const filename = om.value.filename;
+  if (!filename || !Number.isFinite(ratio) || ratio === 1) return;
+
+  const rescaleRow = (row, fields) => {
+    if (row.filename !== filename) return row;
+    const next = { ...row };
+    fields.forEach((field) => {
+      const value = Number(next[field]);
+      if (Number.isFinite(value)) next[field] = value * ratio;
+    });
+    return next;
+  };
+
+  rows.value = {
+    lateral: rows.value.lateral.map((row) =>
+      rescaleRow(row, LATERAL_LINEAR_FIELDS),
+    ),
+    dorsal: rows.value.dorsal.map((row) =>
+      rescaleRow(row, DORSAL_LINEAR_FIELDS),
+    ),
+  };
+};
+
 const setScaleBar = () => {
+  const oldFactor = Number(scales.value.factor) || 1;
   om.value.settings.scalebar_ready = true;
   scales.value.zoom = 1;
   getFactor();
+  const newFactor = Number(scales.value.factor);
+  // уже сохранённые результаты текущего файла пересчитываем под новый масштаб
+  if (Number.isFinite(newFactor) && newFactor > 0) {
+    rescaleRowsForCurrentFile(newFactor / oldFactor);
+  }
   lso.updateMeasures();
   concave_lso.updateMeasures();
   dso.updateMeasures();

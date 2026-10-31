@@ -16,10 +16,14 @@
     "build:electron": "quasar build -m electron",
     "build:electron:win64": "quasar build -m electron -T win32 --arch x64",
     "build:electron:win32": "quasar build -m electron -T win32 --arch ia32",
+    "build:electron:linux": "quasar build -m electron -T linux --arch x64",
     "build:electron:debug": "quasar build -m electron -d",
     "build:electron:ui": "quasar build -m electron -s",
     "clean": "quasar clean",
     "package:win": "npm run build:electron && powershell Compress-Archive -Path \"dist/electron/Packaged/win-unpacked/*\" -DestinationPath \"dist/Otri_Windows_x64_Portable.zip\" -Force",
+    "zip:win": "powershell Compress-Archive -Path \"dist/electron/Packaged/win-unpacked/*\" -DestinationPath \"dist/Otri_Windows_x64_Portable.zip\" -Force",
+    "zip:linux": "powershell Compress-Archive -Path \"dist/electron/Packaged/linux-unpacked/*\" -DestinationPath \"dist/Otri_Linux_x64_Portable.zip\" -Force",
+    "release": "npm run clean && npm run build:electron:win64 && npm run zip:win && npm run build:electron:linux && npm run zip:linux",
     "release:win": "npm run clean && npm run package:win"
   },
   "dependencies": {

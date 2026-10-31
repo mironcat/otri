@@ -45,4 +45,28 @@ function getScalebarLength(scalebar, scales) {
   return length
 }
 
-export { initScalebar, getScalebarLength }
+// Зелёная «впечатанная» масштабная линейка всегда в левом нижнем углу
+// видимой части холста. SVG может быть выше окна, поэтому ориентируемся
+// на реальную видимую нижнюю границу (getBoundingClientRect + viewport).
+function positionScalebarBurned(draw, scalebar) {
+  if (!draw || !scalebar) return
+  const burned = scalebar.get(1)
+  const base = burned && burned.get(0)
+  const node = draw.node
+  if (!base || !node) return
+
+  const rect = node.getBoundingClientRect()
+  if (!rect.height) return
+
+  // переводим CSS-пиксели в пользовательские единицы SVG (обычно 1:1)
+  const attrHeight = Number(draw.height()) || rect.height
+  const scaleY = rect.height / attrHeight || 1
+  const viewportBottom = Math.min(rect.bottom, window.innerHeight)
+  const visibleHeight = Math.max(0, (viewportBottom - rect.top) / scaleY)
+
+  const barHeight = Number(base.attr('height')) || 5
+  const margin = 20
+  burned.move(margin, Math.max(margin, visibleHeight - margin - barHeight))
+}
+
+export { initScalebar, getScalebarLength, positionScalebarBurned }
