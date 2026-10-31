@@ -2,6 +2,8 @@
   <q-page class="column canvas-page">
     <div class="row q-ml-md q-mt-md">
       <div class="q-gutter-sm">
+        <q-btn color="primary" @click="createActiveFrame" icon="add_box" :disable="!activeFrameHidden"
+          title="Создать рамку">НОВЫЙ ФРЕЙМ</q-btn>
         <q-btn color="secondary" @click="zoomIn" icon="zoom_in" />
         <q-btn color="secondary" @click="zoomOut" icon="zoom_out" />
         <q-btn color="secondary" @click="rotateImage(-0.5)" icon="rotate_left" />
@@ -68,8 +70,8 @@
         <div class="tables-half col q-pr-sm">
           <div class="row">
             <div class="table-wrap">
-              <q-table class="compact-table" :rows="combinedRows" :columns="tableColumns" row-key="record_no"
-                dense no-data-label="нет данных" @row-click="onRowClick" :row-class="rowClass">
+              <q-table class="compact-table" :rows="combinedRows" :columns="tableColumns" row-key="record_no" dense
+                no-data-label="нет данных" @row-click="onRowClick" :row-class="rowClass">
                 <template v-slot:body-cell-action="props">
                   <q-td :props="props">
                     <q-btn color="primary" icon-right="delete" no-caps flat dense
@@ -98,8 +100,7 @@
             <q-space />
             <q-select v-model="selectedRecordNo" :options="recordOptions" option-value="record_no"
               option-label="recordLabel" emit-value map-options dense outlined options-dense label="Запись"
-              :disable="recordOptions.length === 0" class="record-select"
-              @update:model-value="onRecordSelected" />
+              :disable="recordOptions.length === 0" class="record-select" @update:model-value="onRecordSelected" />
           </div>
           <div class="description-body">
             <Description :om="selectedMeasurements" />
@@ -256,6 +257,8 @@ let bus = inject("bus");
 let canvasResizeObserver = null;
 const om = ref({
   record_no: 0,
+  // ID, который показывается рядом с меткой: активная запись или следующая
+  current_record_id: 1,
   label: "без метки",
   filename: "",
   side: "left",
@@ -287,6 +290,8 @@ const om = ref({
 });
 // Запись, выбранная для текстового описания
 const selectedRecordNo = ref(null);
+// Активная рамка скрыта после сохранения записи — кнопка «Создать рамку» доступна
+const activeFrameHidden = ref(false);
 
 // Список записей: латеральная и дорсальная строки объединяются по record_no
 const recordOptions = computed(() => {
@@ -441,6 +446,61 @@ const overlayEntries = () => [
   ["concave", concave_lso],
   ["dorsal", dso],
 ];
+
+// --- Управление активной рамкой -------------------------------------------
+// После сохранения записи активная рамка скрывается; кнопка «Создать рамку»
+// возвращает её для следующего измерения.
+const setFrameRecordId = (id) => {
+  const value = Number(id) || 1;
+  if (om.value.current_record_id === value) return;
+  om.value.current_record_id = value;
+  bus.emit("frame-id-changed");
+};
+
+const showActiveFrame = () => {
+  if (om.value.lateral_side) {
+    if (om.value.concave_vs) {
+      bus.emit("lateral-show", false);
+      bus.emit("concave-vs", true);
+    } else {
+      bus.emit("concave-vs", false);
+      bus.emit("lateral-show", true);
+    }
+  }
+  if (om.value.dorsal_side) bus.emit("dorsal-show", true);
+  activeFrameHidden.value = false;
+};
+
+const hideActiveFrame = () => {
+  bus.emit("lateral-show", false);
+  bus.emit("concave-vs", false);
+  bus.emit("dorsal-show", false);
+  activeFrameHidden.value = true;
+};
+
+const createActiveFrame = () => {
+  if (!activeFrameHidden.value) return;
+  if (!om.value.lateral_side && !om.value.dorsal_side) {
+    $q.notify({
+      message: "Выберите латеральную или дорсальную сторону",
+      color: "warning",
+      icon: "warning",
+    });
+    return;
+  }
+  showActiveFrame();
+};
+
+// Любое внешнее отображение рамки (таблица, чекбоксы) снова делает её активной
+const onFrameShown = (visible) => {
+  if (!visible) return;
+  activeFrameHidden.value = false;
+  // для новой рамки показываем номер следующей записи
+  if (activeRecordNo == null) setFrameRecordId(om.value.record_no + 1);
+};
+bus.on("lateral-show", onFrameShown);
+bus.on("concave-vs", onFrameShown);
+bus.on("dorsal-show", onFrameShown);
 
 // Матрица изображения: от координат содержимого картинки к координатам холста.
 // Учитывает и трансформацию группы (зум/поворот), и локальный сдвиг
@@ -705,6 +765,10 @@ const activateRecord = (recordNo) => {
   }
   applyRecord(rec);
   activeRecordNo = recordNo;
+  // активная рамка показана — кнопка «Создать рамку» недоступна
+  activeFrameHidden.value = false;
+  // рядом с меткой показываем ID редактируемой записи
+  setFrameRecordId(recordNo);
   // скрыть frozenClone редактируемой записи
   setFrozenVisibility(recordNo, "0");
   bus.emit("record-edit-state", { editing: true });
@@ -854,7 +918,7 @@ const updateRecord = (recordNo) => {
 
   // перезаморозить: удалить старую копию, создать новую
   freezeRecord(recordNo);
-  
+
   // разомкнуть замки, если были включены
   if (om.value.settings.pinToImage.left || om.value.settings.pinToImage.dorsal) {
     om.value.settings.pinToImage.left = false;
@@ -862,7 +926,7 @@ const updateRecord = (recordNo) => {
     bus.emit("pin-image-toggled", { frame: "left", value: false });
     bus.emit("pin-image-toggled", { frame: "dorsal", value: false });
   }
-  
+
   activeRecordNo = null;
 
   // Сдвигаем активные наборы, чтобы замороженная копия была видна под ними
@@ -912,6 +976,8 @@ const updateRecord = (recordNo) => {
 
   selectedRecordNo.value = recordNo;
   bus.emit("record-edit-state", { editing: false });
+  // после сохранения активная рамка исчезает; новая — по кнопке «Создать рамку»
+  hideActiveFrame();
 };
 
 const addRecord = () => {
@@ -1053,6 +1119,8 @@ const addRecord = () => {
   // Сразу показываем описание только что сохранённой записи
   selectedRecordNo.value = savedRecordNo;
   bus.emit("record-edit-state", { editing: false });
+  // Новая рамка сразу не появляется — её можно создать кнопкой на панели
+  hideActiveFrame();
 };
 
 // Кнопка «+» или «save» на рамке — создаёт новую запись или обновляет активную
@@ -1276,6 +1344,7 @@ const fileUploaded = (file) => {
   bus.emit("lateral-show", om.value.lateral_side & !om.value.concave_vs);
   bus.emit("concave-vs", om.value.lateral_side & om.value.concave_vs);
   bus.emit("dorsal-show", om.value.dorsal_side);
+  activeFrameHidden.value = !(om.value.lateral_side || om.value.dorsal_side);
   om.value.filename = file.name;
   //console.log(file)
 };
@@ -1498,7 +1567,7 @@ image {
 
 /* Подсветка выбранной записи */
 .q-table tbody tr.selected-record-row,
-.q-table tbody tr.selected-record-row > td {
+.q-table tbody tr.selected-record-row>td {
   background: rgba(0, 0, 0, 0.06);
 }
 

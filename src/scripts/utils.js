@@ -252,8 +252,8 @@ function addLockToggle(
   const addFo = draw.foreignObject(SIZE, SIZE);
   const addIcon = document.createElement("i");
   addIcon.className = "material-icons";
-  addIcon.textContent = "add";
-  addIcon.title = "Добавить запись и создать копию рамки";
+  addIcon.textContent = "save";
+  addIcon.title = "Добавить запись";
   addIcon.style.cssText =
     "font-size:30px;line-height:42px;display:block;text-align:center;" +
     "color:#127a35;text-shadow:0 0 4px rgba(255,255,255,0.9);opacity:0.6;" +
@@ -331,8 +331,8 @@ function addLockToggle(
       addIcon.title = "Обновить запись";
       addIcon.style.color = "#ff8f00";
     } else {
-      addIcon.textContent = "add";
-      addIcon.title = "Добавить запись и создать копию рамки";
+      addIcon.textContent = "save";
+      addIcon.title = "Добавить запись";
       addIcon.style.color = "#127a35";
     }
   });
@@ -342,8 +342,9 @@ function addLockToggle(
     const ready = Boolean(om.value.settings.scalebar_ready);
     const hasValue = ready && Boolean(om.value.label);
     // при пустой метке показываем бледную подсказку, по которой можно кликнуть
-    const txt = ready ? om.value.label || "метка" : "масштаб не задан";
-    labelEl.text(txt);
+    const base = ready ? om.value.label || "метка" : "масштаб не задан";
+    const id = Number(om.value.current_record_id) || 1;
+    labelEl.text(`№${id} · ${base}`);
     labelEl.fill(hasValue || !ready ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.4)");
     labelEl.attr("pointer-events", ready ? "auto" : "none");
     labelEl.node.style.cursor = ready ? "text" : "default";
@@ -352,6 +353,7 @@ function addLockToggle(
   };
   bus.on("label-changed", updateLabel);
   bus.on("measure-updated", updateLabel);
+  bus.on("frame-id-changed", updateLabel);
 
   // --- редактирование метки прямо на рамке ---------------------------------
   // Клик по подписи открывает поле ввода: Enter или клик вне — сохранить,
