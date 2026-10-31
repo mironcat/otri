@@ -442,6 +442,8 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
   }
   bus.on("concave-vs", (visible) => {
     visible ? mobjects.show() : mobjects.hide();
+    // пересчитать подложку подписи (у скрытой группы getBBox нулевой)
+    updateMeasures();
   });
   bus.on("side-change", (sidecolor) => {
     baseFrame.attr({ stroke: sidecolor });

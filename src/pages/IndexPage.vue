@@ -673,6 +673,8 @@ const refreshFrozenTransforms = () => {
         "transform",
         mimg.clone().multiply(new Matrix(state.transform)),
       );
+      // точки/линии замороженной копии тоже не должны расти при зуме
+      syncGroupStyle(g);
     });
   });
 };
@@ -762,9 +764,9 @@ watch(
 );
 
 // --- Управление визуальными размерами точек и линий -------------------------
-// Кнопка "tune" в шапке меняет множители; здесь применяем их
-// относительно предыдущих значений к группам всех трёх наборов.
-import { changeScales } from "@/scripts/geostyle.js";
+// Кнопка "tune" в шапке меняет множители; здесь пересчитываем размеры
+// с компенсацией текущего масштаба групп.
+import { syncGroupStyle } from "@/scripts/geostyle.js";
 
 // Подгонка размеров SVG под контейнер: канвас растягивается на всё
 // свободное место (ширина и высота), оставшееся от панелей и таблиц.
@@ -776,11 +778,21 @@ function sizeCanvasToContainer() {
   resizeGuides(width, height);
 }
 
-bus.on("geo-style-changed", ({ prevPoint, prevLine }) => {
+// Привести размеры точек/линий всех наборов к текущим множителям
+// и текущему масштабу групп (чтобы при зуме с замком они не росли).
+const syncAllGeoStyles = () => {
   [lso, dso, concave_lso].forEach((obj) => {
-    if (obj && obj.mobjects) changeScales(obj.mobjects, prevPoint, prevLine);
+    if (obj && obj.mobjects) syncGroupStyle(obj.mobjects);
   });
-});
+  frozenGroups.forEach((groups) => {
+    Object.values(groups).forEach((g) => {
+      if (g) syncGroupStyle(g);
+    });
+  });
+};
+
+bus.on("geo-style-changed", syncAllGeoStyles);
+bus.on("overlays-transformed", syncAllGeoStyles);
 
 onMounted(() => {
   // console.log(canvasRef.value)
