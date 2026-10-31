@@ -86,6 +86,38 @@ export default function leftSideObjects(draw, om, scales, bus) {
     })
     .move(0, -17);
 
+  // светлая подложка под надписью стороны — как у метки по центру рамки
+  const sideLabelBg = draw
+    .rect(0, 0)
+    .fill("#fff")
+    .addClass("side-label-bg")
+    .attr({ "fill-opacity": 0.75, "pointer-events": "none" });
+
+  // размеры подложки пересчитываются по локальному bbox текста
+  const layoutSideLabelBg = () => {
+    if (!sideLabel.node) return;
+    let bb;
+    try {
+      bb = sideLabel.node.getBBox();
+    } catch (e) {
+      return;
+    }
+    if (!bb.width || !bb.height) {
+      sideLabelBg.attr({ width: 0, height: 0 });
+      return;
+    }
+    const pad = 2;
+    sideLabelBg.attr({
+      x: bb.x - pad,
+      y: bb.y - pad,
+      width: bb.width + pad * 2,
+      height: bb.height + pad * 2,
+      rx: 2,
+      ry: 2,
+    });
+  };
+  layoutSideLabelBg();
+
   const frameResizer = draw
     .rect(15, 15)
     .fill({ color: om.value.side == "left" ? "darkblue" : "red" })
@@ -109,6 +141,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
     .attr({ id: "mobjects" })
     .add(baseFrame)
     .add(frameResizer)
+    .add(sideLabelBg)
     .add(sideLabel);
   // tangent PMC points connection line
   const PCMpolylineCoords = [
@@ -522,6 +555,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
       x: baseFrame.attr("x"),
       y: baseFrame.attr("y") - 17,
     });
+    layoutSideLabelBg();
     om.value.length = baseFrame.attr("width") * scales.value.factor;
     om.value.height = baseFrame.attr("height") * scales.value.factor;
     const bFA = baseFrame.attr(["x", "y", "width", "height"]);

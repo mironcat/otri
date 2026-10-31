@@ -568,6 +568,8 @@ const FROZEN_FILL_COLOR = "#00e676";
 const colorizeFrozenElement = (el) => {
   const tag = el.node && String(el.node.tagName).toLowerCase();
   if (tag === "rect") {
+    // подложка подписи стороны остаётся белой, без зелёной обводки
+    if (el.hasClass && el.hasClass("side-label-bg")) return;
     el.attr("stroke", FROZEN_FRAME_COLOR);
     return;
   }
