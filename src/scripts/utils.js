@@ -207,7 +207,7 @@ function addLockToggle(
   frameResizer,
   frameKey,
 ) {
-  const SIZE = 28;
+  const SIZE = 42;
   const isPinned = () => Boolean(om.value.settings.pinToImage?.[frameKey]);
 
   // текстовая подпись над иконками — om.label или "масштаб не задан".
@@ -225,14 +225,14 @@ function addLockToggle(
     .fill("#fff")
     .attr({ "fill-opacity": 0.75, "pointer-events": "none" });
 
-  // замочек
+  // замочек — зелёная полупрозрачная иконка, в одном стиле с «+»
   const fo = draw.foreignObject(SIZE, SIZE);
   const icon = document.createElement("i");
   icon.className = "material-icons";
   icon.style.cssText =
-    "font-size:20px;line-height:28px;display:block;text-align:center;" +
-    "color:#555;text-shadow:0 0 4px rgba(255,255,255,0.9);opacity:0.55;" +
-    "transition:opacity .2s;cursor:pointer;user-select:none;";
+    "font-size:30px;line-height:42px;display:block;text-align:center;" +
+    "color:#127a35;text-shadow:0 0 4px rgba(255,255,255,0.9);opacity:0.6;" +
+    "transition:opacity .2s,color .2s;cursor:pointer;user-select:none;";
   const updateIcon = (locked) => {
     icon.textContent = locked ? "lock" : "lock_open";
   };
@@ -248,17 +248,16 @@ function addLockToggle(
 
   // кнопка «+» справа от замочка: добавляет запись в таблицу,
   // замораживает текущий набор baseFrame и создаёт копию для следующей записи.
-  // Крупная зелёная кнопка с белым крестом — заметнее полупрозрачного замка.
+  // Оформлена как замочек — зелёная полупрозрачная иконка без подложки.
   const addFo = draw.foreignObject(SIZE, SIZE);
   const addIcon = document.createElement("i");
   addIcon.className = "material-icons";
   addIcon.textContent = "add";
   addIcon.title = "Добавить запись и создать копию рамки";
   addIcon.style.cssText =
-    "font-size:20px;line-height:24px;display:block;width:24px;height:24px;" +
-    "margin:2px;box-sizing:border-box;border-radius:50%;text-align:center;" +
-    "color:#fff;background:#127a35;box-shadow:0 1px 4px rgba(0,0,0,0.45);" +
-    "opacity:1;transition:opacity .2s,transform .15s;cursor:pointer;" +
+    "font-size:30px;line-height:42px;display:block;text-align:center;" +
+    "color:#127a35;text-shadow:0 0 4px rgba(255,255,255,0.9);opacity:0.6;" +
+    "transition:opacity .2s,transform .15s,color .2s;cursor:pointer;" +
     "user-select:none;";
   addFo.node.appendChild(addIcon);
   addIcon.addEventListener("click", (e) => {
@@ -271,7 +270,7 @@ function addLockToggle(
     addIcon.style.transform = "scale(1.08)";
   });
   addIcon.addEventListener("mouseleave", () => {
-    addIcon.style.opacity = "1";
+    addIcon.style.opacity = "0.6";
     addIcon.style.transform = "scale(1)";
   });
 
@@ -282,7 +281,7 @@ function addLockToggle(
   resetIcon.className = "material-icons";
   resetIcon.textContent = "refresh";
   resetIcon.style.cssText =
-    "font-size:20px;line-height:28px;display:block;text-align:center;" +
+    "font-size:20px;line-height:42px;display:block;text-align:center;" +
     "color:#555;text-shadow:0 0 4px rgba(255,255,255,0.9);opacity:1;" +
     "transition:opacity .2s;cursor:pointer;user-select:none;";
   resetFo.node.appendChild(resetIcon);
@@ -325,18 +324,16 @@ function addLockToggle(
   };
 
   // При активации записи иконка «+» меняется на дискету «сохранить»,
-  // фон из зелёного становится оранжевым.
+  // цвет с зелёного на оранжевый (стиль иконки сохраняется).
   bus.on("record-edit-state", ({ editing }) => {
     if (editing) {
       addIcon.textContent = "save";
       addIcon.title = "Обновить запись";
-      addIcon.style.backgroundColor = "#ff8f00";
-      addIcon.style.boxShadow = "0 1px 4px rgba(0,0,0,0.45)";
+      addIcon.style.color = "#ff8f00";
     } else {
       addIcon.textContent = "add";
       addIcon.title = "Добавить запись и создать копию рамки";
-      addIcon.style.backgroundColor = "#127a35";
-      addIcon.style.boxShadow = "0 1px 4px rgba(0,0,0,0.45)";
+      addIcon.style.color = "#127a35";
     }
   });
 
@@ -345,7 +342,7 @@ function addLockToggle(
     const ready = Boolean(om.value.settings.scalebar_ready);
     const hasValue = ready && Boolean(om.value.label);
     // при пустой метке показываем бледную подсказку, по которой можно кликнуть
-    const txt = ready ? (om.value.label || "метка") : "масштаб не задан";
+    const txt = ready ? om.value.label || "метка" : "масштаб не задан";
     labelEl.text(txt);
     labelEl.fill(hasValue || !ready ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.4)");
     labelEl.attr("pointer-events", ready ? "auto" : "none");
@@ -381,8 +378,9 @@ function addLockToggle(
     if (labelEditFo) return;
     if (!om.value.settings.scalebar_ready) return;
 
-    // bbox подписи в координатах холста (учитывает трансформацию группы)
-    const bb = labelEl.bbox();
+    // bbox подписи в локальных координатах группы — поле ввода добавляем
+    // в ту же группу, поэтому оно совпадает с текстом при любом зуме/сдвиге
+    const bb = labelEl.node.getBBox();
     const width = Math.max(130, bb.width + 24);
     const height = 22;
     labelEditFo = draw.foreignObject(width, height);
@@ -392,6 +390,7 @@ function addLockToggle(
       width,
       height,
     });
+    mobjects.add(labelEditFo);
     const input = document.createElement("input");
     input.type = "text";
     input.value = om.value.label || "";
@@ -491,8 +490,12 @@ function addLockToggle(
     position();
   });
   icon.addEventListener("mousedown", (e) => e.stopPropagation());
-  icon.addEventListener("mouseenter", () => { icon.style.opacity = "0.85"; });
-  icon.addEventListener("mouseleave", () => { icon.style.opacity = "0.55"; });
+  icon.addEventListener("mouseenter", () => {
+    icon.style.opacity = "0.85";
+  });
+  icon.addEventListener("mouseleave", () => {
+    icon.style.opacity = "0.6";
+  });
 
   // клик по refresh — сброс поворота + размыкание замка
   resetIcon.addEventListener("click", (e) => {
@@ -502,7 +505,9 @@ function addLockToggle(
     const angle = Math.atan2(M.b, M.a);
     if (Math.abs(angle) > 0.005) {
       const b = mobjects.bbox();
-      mobjects.transform(M.clone().rotate(-(angle * 180) / Math.PI, b.cx, b.cy));
+      mobjects.transform(
+        M.clone().rotate(-(angle * 180) / Math.PI, b.cx, b.cy),
+      );
     }
     // размыкаем замок
     om.value.settings.pinToImage[frameKey] = false;
@@ -512,8 +517,12 @@ function addLockToggle(
     bus.emit("pin-image-toggled", { frame: frameKey, value: false });
   });
   resetIcon.addEventListener("mousedown", (e) => e.stopPropagation());
-  resetIcon.addEventListener("mouseenter", () => { resetIcon.style.opacity = "0.85"; });
-  resetIcon.addEventListener("mouseleave", () => { resetIcon.style.opacity = "1"; });
+  resetIcon.addEventListener("mouseenter", () => {
+    resetIcon.style.opacity = "0.85";
+  });
+  resetIcon.addEventListener("mouseleave", () => {
+    resetIcon.style.opacity = "1";
+  });
 
   // При замке перетаскивание внутри рамки двигает её вместе с картинкой:
   // рамку уже сдвигает svg.draggable, а IndexPage по этому событию
