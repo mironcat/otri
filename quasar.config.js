@@ -8,7 +8,7 @@
 // Configuration for your app
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js
 
-import { defineConfig } from '#q-app'
+import { defineConfig } from "#q-app";
 
 export default defineConfig(function (/* ctx */) {
   return {
@@ -18,10 +18,10 @@ export default defineConfig(function (/* ctx */) {
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
-    boot: ['svgjs'],
+    boot: ["svgjs"],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#css
-    css: ['app.scss'],
+    css: ["app.scss"],
 
     // https://github.com/quasarframework/quasar/tree/dev/extras
     extras: [
@@ -33,17 +33,17 @@ export default defineConfig(function (/* ctx */) {
       // 'line-awesome',
       // 'roboto-font-latin-ext', // this or either 'roboto-font', NEVER both!
 
-      'roboto-font', // optional, you are not bound to it
-      'material-icons' // optional, you are not bound to it
+      "roboto-font", // optional, you are not bound to it
+      "material-icons", // optional, you are not bound to it
     ],
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#build
     build: {
       target: {
-        browser: ['es2022', 'edge88', 'firefox78', 'chrome87', 'safari13.1']
+        browser: ["es2022", "edge88", "firefox78", "chrome87", "safari13.1"],
       },
 
-      vueRouterMode: 'hash', // available values: 'hash', 'history'
+      vueRouterMode: "hash", // available values: 'hash', 'history'
       // vueRouterBase,
       // vueDevtools,
       // vueOptionsAPI: false,
@@ -68,7 +68,7 @@ export default defineConfig(function (/* ctx */) {
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#devServer
     devServer: {
       // https: true
-      open: false // opens browser window automatically
+      open: false, // opens browser window automatically
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#framework
@@ -76,7 +76,7 @@ export default defineConfig(function (/* ctx */) {
       config: {},
 
       // iconSet: 'material-icons', // Quasar icon set
-      lang: 'ru', // язык встроенных элементов Quasar (таблицы, файлы и т.п.)
+      lang: "ru", // язык встроенных элементов Quasar (таблицы, файлы и т.п.)
 
       // For special cases outside of where the auto-import strategy can have an impact
       // (like functional components as one of the examples),
@@ -86,7 +86,7 @@ export default defineConfig(function (/* ctx */) {
       // directives: [],
 
       // Quasar plugins
-      plugins: ['Notify']
+      plugins: ["Notify"],
     },
 
     // animations: 'all', // --- includes all animations
@@ -122,17 +122,17 @@ export default defineConfig(function (/* ctx */) {
       // (gets superseded if process.env.PORT is specified at runtime)
 
       middlewares: [
-        'render' // keep this as last one
-      ]
+        "render", // keep this as last one
+      ],
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/developing-pwa/configuring-pwa
     pwa: {
-      workboxMode: 'generateSW', // or 'injectManifest'
+      workboxMode: "generateSW", // or 'injectManifest'
       injectPWAMetaTags: true,
-      swFilename: 'sw.js',
-      manifestFilename: 'manifest.json',
-      useCredentialsForManifestTag: false
+      swFilename: "sw.js",
+      manifestFilename: "manifest.json",
+      useCredentialsForManifestTag: false,
       // useFilenameHashes: true,
       // extendPWAGenerateSWOptions (cfg) {}
       // extendPWAInjectManifestOptions (cfg) {},
@@ -145,7 +145,7 @@ export default defineConfig(function (/* ctx */) {
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/developing-capacitor-apps/configuring-capacitor
     capacitor: {
-      hideSplashscreen: true
+      hideSplashscreen: true,
     },
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/developing-electron-apps/configuring-electron
@@ -156,13 +156,13 @@ export default defineConfig(function (/* ctx */) {
       // specify the debugging port to use for the Electron app when running in development mode
       inspectPort: 5858,
 
-      bundler: 'builder', // 'packager' or 'builder'
+      bundler: "builder", // 'packager' or 'builder'
 
       // Quasar runs `pnpm install --prod` in dist/electron/UnPackaged;
       // without --ignore-workspace pnpm resolves the workspace root and,
       // in --prod mode, prunes root node_modules dev dependencies
       // (which breaks the subsequent require('electron-builder'))
-      unPackagedInstallParams: ['install', '--prod', '--ignore-workspace'],
+      unPackagedInstallParams: ["install", "--prod", "--ignore-workspace"],
 
       packager: {
         // https://electron.github.io/packager/main/interfaces/options.html
@@ -170,27 +170,33 @@ export default defineConfig(function (/* ctx */) {
 
       builder: {
         // https://www.electron.build/configuration/configuration
-        appId: 'otri',
-        productName: 'Otri',
-        copyright: 'Copyright © 2024 Eugeny Karasev',
+        appId: "otri",
+        productName: "Otri",
+        copyright: "Copyright © 2026 Eugeny Karasev",
         win: {
-          target: 'portable'
+          target: "portable",
           // arch задаётся в target или CLI (quasar build -m electron -T win32 --arch x64)
         },
+        // Портативная папка: собирается и на Windows, и на Linux.
+        // AppImage/deb при необходимости собираются на Linux или в CI.
+        linux: {
+          target: "dir",
+          category: "Science",
+        },
         portable: {
-          artifactName: 'Otri-${version}-${arch}.exe'
-        }
+          artifactName: "Otri-${version}-${arch}.exe",
+        },
         // files задавать не нужно: Quasar уже указывает directories.app
         // = dist/electron/UnPackaged, electron-builder упаковывает всё из него
-      }
+      },
     },
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/developing-browser-extensions/configuring-bex
     bex: {
-      contentScripts: ['my-content-script']
+      contentScripts: ["my-content-script"],
 
       // extendBexScriptsConf (rolldownConf) {}
       // extendBexManifestJson (json) {}
-    }
-  }
-})
+    },
+  };
+});
