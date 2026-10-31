@@ -3,6 +3,14 @@
     <q-header elevated>
       <q-toolbar>
         <q-btn flat dense round icon="menu" aria-label="Меню" @click="toggleLeftDrawer" />
+        <q-btn flat dense round icon="save" aria-label="Сохранить проект"
+          @click="bus.emit('save-project')">
+          <q-tooltip>Сохранить проект (.otr)</q-tooltip>
+        </q-btn>
+        <q-btn flat dense round icon="folder_open" aria-label="Открыть проект"
+          @click="bus.emit('open-project')">
+          <q-tooltip>Открыть проект (.otr)</q-tooltip>
+        </q-btn>
         <q-btn-group flat>
 
           <q-btn flat dense round icon="border_horizontal" :color="guidesVisible.h ? 'pink-4' : 'grey-6'"
@@ -60,7 +68,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, inject, computed } from "vue";
+import { ref, onMounted, onBeforeUnmount, inject, computed } from "vue";
 import MeasureResults from "@/components/MeasureResults.vue";
 import InterpretationResults from "@/components/InterpretationResults.vue";
 import {
@@ -106,6 +114,18 @@ onMounted(() => {
 
 // --- Управление размером точек и линий ---
 const bus = inject("bus");
+
+// Команды из меню Electron «Файл» пробрасываем в шину приложения,
+// чтобы их обработал IndexPage теми же функциями, что и кнопки шапки.
+const disposeProjectMenu = window.otriProject?.onProjectAction?.((action) => {
+  if (action === "save") bus.emit("save-project");
+  else if (action === "open") bus.emit("open-project");
+});
+
+onBeforeUnmount(() => {
+  if (typeof disposeProjectMenu === "function") disposeProjectMenu();
+});
+
 const pointScale = ref(getPointScale());
 const lineScale = ref(getLineScale());
 const styleChanged = computed(

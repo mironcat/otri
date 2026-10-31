@@ -401,6 +401,7 @@ const addImageFrame = (group, img) => {
     .rect(width, height)
     .move(x, y)
     .fill("none")
+    .addClass("image-frame")
     .stroke({
       color: "gray",
       width: 1.5,
@@ -897,6 +898,8 @@ onBeforeUnmount(() => {
     canvasResizeObserver = null;
   }
   bus.off("add-record", handleRecordAction);
+  bus.off("save-project", saveProject);
+  bus.off("open-project", openProject);
 });
 
 // Обновить существующую запись новыми измерениями и геометрией
@@ -1313,20 +1316,30 @@ const setScaleBar = () => {
   dso.updateMeasures();
 };
 let currentImageUrl = null;
-const fileUploaded = (file) => {
-  if (!file) return;
+let currentImagePath = "";
+let currentProjectPath = "";
+
+const clonePlain = (value) => JSON.parse(JSON.stringify(value));
+
+const blobToDataUrl = (blob) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+
+// Полное пересоздание сцены под новое изображение (общая часть для загрузки
+// файла и открытия проекта).
+const setupScene = (imageUrl, filename) => {
   draw.clear();
   // старые записи относились к прежнему изображению
   recordFrames.clear();
   frozenGroups.clear();
   activeRecordNo = null;
   bus.emit("record-edit-state", { editing: false });
-  // Electron 32+ removed File.path, so use a blob URL instead of a local path
-  if (currentImageUrl) URL.revokeObjectURL(currentImageUrl);
-  currentImageUrl = URL.createObjectURL(file);
-  // mainimage = draw.image(file.path).attr('id', 'mainimage').size(400, 400).draggable().move(300, 100)
   mainimage = draw.group().attr({ id: "maig" }).draggable();
-  const img = draw.image(currentImageUrl).attr("id", "mainimage").size(400, 400);
+  const img = draw.image(imageUrl).attr("id", "mainimage").size(400, 400);
   mainimage.add(img.move(300, 100));
   addImageFrame(mainimage, img);
   mainimage.on("dragmove", onImageDrag);
@@ -1345,9 +1358,336 @@ const fileUploaded = (file) => {
   bus.emit("concave-vs", om.value.lateral_side & om.value.concave_vs);
   bus.emit("dorsal-show", om.value.dorsal_side);
   activeFrameHidden.value = !(om.value.lateral_side || om.value.dorsal_side);
-  om.value.filename = file.name;
-  //console.log(file)
+  om.value.filename = filename;
 };
+
+const fileUploaded = (file) => {
+  if (!file) return;
+  currentProjectPath = "";
+  if (currentImageUrl) URL.revokeObjectURL(currentImageUrl);
+  currentImageUrl = URL.createObjectURL(file);
+  // Electron 32+ removed File.path — получаем путь через preload/webUtils
+  currentImagePath = window.otriProject?.getPathForFile?.(file) || "";
+  setupScene(currentImageUrl, file.name);
+};
+
+// --- Сохранение/открытие проекта .otr -------------------------------------
+const buildProjectData = () => {
+  const imgEl = draw.findOne("#mainimage");
+  const imgRect = imgEl
+    ? {
+        x: Number(imgEl.attr("x")) || 0,
+        y: Number(imgEl.attr("y")) || 0,
+        width: Number(imgEl.attr("width")) || 0,
+        height: Number(imgEl.attr("height")) || 0,
+      }
+    : null;
+  const m = mainimage.matrixify();
+  const sm = scalebar.matrixify();
+  const sets = {};
+  overlayEntries().forEach(([key, obj]) => {
+    const state = captureSet(obj);
+    if (state) sets[key] = state;
+  });
+  // внутренние элементы масштабной линейки (положение концов)
+  const resizer = scalebar.get(0);
+  const line = resizer && resizer.get(0);
+  const start = resizer && resizer.get(1);
+  const end = resizer && resizer.get(2);
+  const rm = resizer ? resizer.matrixify() : null;
+  return {
+    format: "otri-project",
+    version: 1,
+    createdAt: new Date().toISOString(),
+    image: {
+      path: currentImagePath || "",
+      name: om.value.filename || "",
+      transform: [m.a, m.b, m.c, m.d, m.e, m.f],
+      rect: imgRect,
+    },
+    scalebar: {
+      transform: [sm.a, sm.b, sm.c, sm.d, sm.e, sm.f],
+      resizerTransform: rm ? [rm.a, rm.b, rm.c, rm.d, rm.e, rm.f] : null,
+      resizer: line && start && end
+        ? {
+            line: line.attr(["x1", "y1", "x2", "y2"]),
+            start: start.attr(["x", "y"]),
+            end: end.attr(["x", "y"]),
+          }
+        : null,
+    },
+    om: clonePlain(om.value),
+    scales: clonePlain(scales.value),
+    rows: clonePlain(rows.value),
+    records: Array.from(recordFrames.entries()).map(([recordNo, rec]) => ({
+      record_no: recordNo,
+      ...clonePlain(rec),
+    })),
+    activeFrame: {
+      hidden: activeFrameHidden.value,
+      recordId: om.value.current_record_id,
+      sets,
+    },
+    activeRecordNo,
+    selectedRecordNo: selectedRecordNo.value,
+    ui: {
+      showTables: showTables.value,
+      showDescription: showDescription.value,
+    },
+  };
+};
+
+const saveProject = async () => {
+  if (!window.otriProject?.save) {
+    $q.notify({
+      message: "Сохранение проекта доступно только в приложении",
+      color: "warning",
+      icon: "warning",
+    });
+    return;
+  }
+  try {
+    const data = buildProjectData();
+    // если путь к изображению неизвестен (например, стартовая картинка),
+    // встраиваем его в проект, чтобы файл можно было открыть позже
+    if (!data.image.path) {
+      const el = draw.findOne("#mainimage");
+      const src =
+        el &&
+        (el.node.getAttribute("href") ||
+          el.node.getAttribute("xlink:href") ||
+          "");
+      if (src) {
+        // относительный/встроенный адрес можно сохранить как есть
+        if (!src.startsWith("blob:")) data.image.asset = src;
+        try {
+          const response = await fetch(src);
+          data.image.dataUrl = await blobToDataUrl(await response.blob());
+        } catch {
+          // без встроенной картинки проект всё равно сохранится
+        }
+      }
+    }
+    const res = await window.otriProject.save(
+      data,
+      currentProjectPath || undefined,
+    );
+    if (res?.canceled) return;
+    currentProjectPath = res.filePath || currentProjectPath;
+    $q.notify({
+      message: `Проект сохранён: ${res.filePath}`,
+      color: "positive",
+      icon: "save",
+    });
+  } catch (err) {
+    $q.notify({
+      message: `Не удалось сохранить проект: ${err.message}`,
+      color: "negative",
+      icon: "error",
+    });
+  }
+};
+
+// Пересоздать замороженные копии записей из сохранённых снимков.
+// Для каждой записи временно применяем её геометрию к живым наборам,
+// клонируем их (makeFrozenClone) и в конце возвращаем текущее состояние.
+const rebuildFrozenClones = () => {
+  const currentSets = {};
+  overlayEntries().forEach(([key, obj]) => {
+    const state = captureSet(obj);
+    if (state) currentSets[key] = state;
+  });
+  const currentLabel = om.value.label;
+  const currentId = om.value.current_record_id;
+
+  Array.from(frozenGroups.keys()).forEach((recordNo) =>
+    removeFrozenRecord(recordNo),
+  );
+
+  Array.from(recordFrames.entries()).forEach(([recordNo, rec]) => {
+    overlayEntries().forEach(([key, obj]) => {
+      if (rec[key]) restoreSet(obj, rec[key]);
+    });
+    // подпись клона — метка и ID именно этой записи
+    om.value.label = rec.ui?.label ?? currentLabel;
+    om.value.current_record_id = recordNo;
+    bus.emit("frame-id-changed");
+    freezeRecord(recordNo);
+  });
+
+  overlayEntries().forEach(([key, obj]) => {
+    if (currentSets[key]) restoreSet(obj, currentSets[key]);
+  });
+  om.value.label = currentLabel;
+  om.value.current_record_id = currentId;
+  bus.emit("frame-id-changed");
+};
+
+const restoreProject = async (project, filePath) => {
+  if (!project || project.format !== "otri-project") {
+    throw new Error("Неверный формат файла проекта");
+  }
+  const savedOm = clonePlain(project.om || {});
+  const savedScales = clonePlain(project.scales || {});
+  const img = project.image || {};
+
+  let imageUrl = null;
+  if (img.path) {
+    try {
+      const read = await window.otriProject.readImage(img.path);
+      if (read?.dataUrl) imageUrl = read.dataUrl;
+    } catch {
+      // путь мог устареть — ниже попробуем встроенное изображение
+    }
+  }
+  if (!imageUrl && img.dataUrl) imageUrl = img.dataUrl;
+  // относительный адрес ассета (например, стартовая картинка)
+  if (!imageUrl && img.asset) imageUrl = img.asset;
+  if (!imageUrl) {
+    throw new Error("Не удалось прочитать изображение проекта");
+  }
+
+  // конфигурация нужна до пересоздания сцены (масштабная линейка, видимость)
+  Object.assign(scales.value, savedScales);
+  Object.assign(om.value, clonePlain(savedOm));
+
+  if (currentImageUrl) {
+    URL.revokeObjectURL(currentImageUrl);
+    currentImageUrl = null;
+  }
+  setupScene(imageUrl, img.name || savedOm.filename || "");
+  currentImagePath = img.path || "";
+  currentProjectPath = filePath || "";
+  imagefile.value = null;
+
+  // изображение: геометрия и трансформация группы
+  const imgEl = draw.findOne("#mainimage");
+  if (imgEl && img.rect) imgEl.attr(img.rect);
+  if (img.transform) {
+    const [a, b, c, d, e, f] = img.transform;
+    mainimage.attr("transform", `matrix(${a},${b},${c},${d},${e},${f})`);
+  }
+  const frameEl = mainimage.findOne(".image-frame");
+  if (frameEl && img.rect) frameEl.attr(img.rect);
+
+  // масштабная линейка: положение группы и концов
+  if (project.scalebar?.transform) {
+    const [a, b, c, d, e, f] = project.scalebar.transform;
+    scalebar.attr("transform", `matrix(${a},${b},${c},${d},${e},${f})`);
+  }
+  const sb = project.scalebar?.resizer;
+  if (sb) {
+    const resizer = scalebar.get(0);
+    if (project.scalebar?.resizerTransform && resizer) {
+      const [ra, rb, rc, rd, re, rf] = project.scalebar.resizerTransform;
+      resizer.attr(
+        "transform",
+        `matrix(${ra},${rb},${rc},${rd},${re},${rf})`,
+      );
+    }
+    const line = resizer && resizer.get(0);
+    const start = resizer && resizer.get(1);
+    const end = resizer && resizer.get(2);
+    const label = resizer && resizer.get(3);
+    if (line && sb.line) line.attr(sb.line);
+    if (start && sb.start) start.attr(sb.start);
+    if (end && sb.end) {
+      end.attr(sb.end);
+      if (label) label.attr({ x: Number(sb.end.x) + 15, y: Number(sb.end.y) });
+    }
+  }
+
+  // данные таблиц и записей
+  rows.value = clonePlain(project.rows || { lateral: [], dorsal: [] });
+  recordFrames.clear();
+  (project.records || []).forEach((rec) => {
+    const { record_no, ...state } = rec;
+    recordFrames.set(Number(record_no), clonePlain(state));
+  });
+  selectedRecordNo.value = project.selectedRecordNo ?? null;
+  showTables.value = Boolean(project.ui?.showTables);
+  showDescription.value = project.ui?.showDescription !== false;
+
+  // геометрия текущей (активной) рамки
+  const active = project.activeFrame || {};
+  overlayEntries().forEach(([key, obj]) => {
+    if (active.sets && active.sets[key]) restoreSet(obj, active.sets[key]);
+  });
+
+  // восстановить настройки после setupScene (addScaleBar сбросил ready)
+  Object.assign(om.value, clonePlain(savedOm));
+
+  activeRecordNo = project.activeRecordNo ?? null;
+  if (activeRecordNo != null) {
+    om.value.current_record_id = activeRecordNo;
+    bus.emit("record-edit-state", { editing: true });
+  } else {
+    om.value.current_record_id =
+      active.recordId ?? Number(om.value.record_no) + 1;
+  }
+  bus.emit("frame-id-changed");
+  bus.emit("label-changed");
+
+  rebuildFrozenClones();
+
+  // после пересборки вернуть измерения и подпись текущей рамки
+  Object.assign(om.value, clonePlain(savedOm));
+  if (activeRecordNo != null) {
+    om.value.current_record_id = activeRecordNo;
+  } else {
+    om.value.current_record_id =
+      active.recordId ?? Number(om.value.record_no) + 1;
+  }
+  bus.emit("frame-id-changed");
+  bus.emit("label-changed");
+
+  // видимость рамки и замороженной копии редактируемой записи
+  activeFrameHidden.value = Boolean(active.hidden);
+  if (activeFrameHidden.value) {
+    hideActiveFrame();
+  } else {
+    activeFrameHidden.value = false;
+  }
+  if (activeRecordNo != null) setFrozenVisibility(activeRecordNo, "0");
+
+  // блокировка перетаскивания картинки
+  mainimage.draggable(!om.value.settings.image_lock);
+
+  getFactor();
+  syncAllGeoStyles();
+  bus.emit("measure-updated", om.value);
+};
+
+const openProject = async () => {
+  if (!window.otriProject?.open) {
+    $q.notify({
+      message: "Открытие проекта доступно только в приложении",
+      color: "warning",
+      icon: "warning",
+    });
+    return;
+  }
+  try {
+    const res = await window.otriProject.open();
+    if (res?.canceled) return;
+    await restoreProject(res.data, res.filePath);
+    $q.notify({
+      message: "Проект загружен",
+      color: "positive",
+      icon: "folder_open",
+    });
+  } catch (err) {
+    $q.notify({
+      message: `Не удалось открыть проект: ${err.message}`,
+      color: "negative",
+      icon: "error",
+    });
+  }
+};
+
+// Кнопки сохранения/открытия находятся в шапке MainLayout
+bus.on("save-project", saveProject);
+bus.on("open-project", openProject);
 const combinedColumns = [
   {
     name: "no",
