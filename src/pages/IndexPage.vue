@@ -396,7 +396,12 @@ const addImageFrame = (group, img) => {
     .rect(width, height)
     .move(x, y)
     .fill("none")
-    .stroke({ color: "gray", width: 1 })
+    .stroke({
+      color: "gray",
+      width: 1.5,
+      linecap: "round",
+      dasharray: "1,4",
+    })
     .attr({ "vector-effect": "non-scaling-stroke" });
   group.add(frame);
   return frame;
@@ -1400,6 +1405,17 @@ image {
   border-style: solid;
   border-color: gray;
   border-width: thin;
+}
+
+/* Изображение можно перетаскивать — курсор-рука над ним */
+#maig,
+#maig * {
+  cursor: grab;
+}
+
+#maig:active,
+#maig:active * {
+  cursor: grabbing;
 }
 
 /* Канвас занимает всё свободное место по высоте страницы.

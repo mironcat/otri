@@ -342,15 +342,89 @@ function addLockToggle(
 
   // подписка на обновление метки извне
   const updateLabel = () => {
-    const txt = om.value.settings.scalebar_ready
-      ? (om.value.label || "")
-      : "масштаб не задан";
+    const ready = Boolean(om.value.settings.scalebar_ready);
+    const hasValue = ready && Boolean(om.value.label);
+    // при пустой метке показываем бледную подсказку, по которой можно кликнуть
+    const txt = ready ? (om.value.label || "метка") : "масштаб не задан";
     labelEl.text(txt);
+    labelEl.fill(hasValue || !ready ? "rgba(0,0,0,0.8)" : "rgba(0,0,0,0.4)");
+    labelEl.attr("pointer-events", ready ? "auto" : "none");
+    labelEl.node.style.cursor = ready ? "text" : "default";
     layoutLabel();
     syncAddVisibility();
   };
   bus.on("label-changed", updateLabel);
   bus.on("measure-updated", updateLabel);
+
+  // --- редактирование метки прямо на рамке ---------------------------------
+  // Клик по подписи открывает поле ввода: Enter или клик вне — сохранить,
+  // Esc — отменить. Значение общее для всех рамок (om.label).
+  let labelEditFo = null;
+  const finishLabelEdit = (commit) => {
+    if (!labelEditFo) return;
+    // снимаем ссылку до remove(): удаление input синхронно вызывает blur,
+    // и повторный вызов finishLabelEdit должен сразу выйти
+    const fo = labelEditFo;
+    labelEditFo = null;
+    const input = fo.node.querySelector("input");
+    const value = input ? input.value.trim() : "";
+    fo.remove();
+    labelEl.attr("opacity", "1");
+    layoutLabel();
+    if (commit) {
+      om.value.label = value;
+      bus.emit("label-changed");
+    }
+  };
+  const startLabelEdit = (event) => {
+    if (event) event.stopPropagation();
+    if (labelEditFo) return;
+    if (!om.value.settings.scalebar_ready) return;
+
+    // bbox подписи в координатах холста (учитывает трансформацию группы)
+    const bb = labelEl.bbox();
+    const width = Math.max(130, bb.width + 24);
+    const height = 22;
+    labelEditFo = draw.foreignObject(width, height);
+    labelEditFo.attr({
+      x: bb.x + bb.width / 2 - width / 2,
+      y: bb.y - 4,
+      width,
+      height,
+    });
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = om.value.label || "";
+    input.placeholder = "метка";
+    input.style.cssText =
+      "width:100%;height:100%;box-sizing:border-box;margin:0;" +
+      "border:1px solid #1976d2;border-radius:3px;padding:1px 5px;" +
+      "font:11px Arial;background:#fff;color:#000;outline:none;";
+    labelEditFo.node.appendChild(input);
+    labelEl.attr("opacity", "0");
+    labelBg.attr("opacity", "0");
+
+    input.addEventListener("mousedown", (ev) => ev.stopPropagation());
+    input.addEventListener("click", (ev) => ev.stopPropagation());
+    input.addEventListener("keydown", (ev) => {
+      ev.stopPropagation();
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        finishLabelEdit(true);
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        finishLabelEdit(false);
+      }
+    });
+    input.addEventListener("blur", () => finishLabelEdit(true));
+    // фокус после завершения текущего клика
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  };
+  labelEl.on("click", startLabelEdit);
+  labelEl.on("mousedown", (ev) => ev.stopPropagation());
 
   // текущая позиция + видимость иконки сброса
   const position = () => {
