@@ -64,8 +64,24 @@
 
     <q-drawer v-model="leftDrawerOpen" :mini="false" :width="drawerWidth" behavior="desktop" bordered>
       <div class="drawer-inner">
-        <MeasureResults />
-        <InterpretationResults />
+        <div class="sidebar-tabs">
+          <q-tabs v-model="sidebarTab" dense no-caps align="left" active-color="primary"
+            indicator-color="primary" switch-indicator>
+            <q-tab name="info" label="Измерения" />
+            <q-tab name="graphs" label="Графики" :disable="graphSelectedRecordNos.length === 0" />
+          </q-tabs>
+          <q-tab-panels v-model="sidebarTab" animated class="sidebar-panels">
+            <q-tab-panel name="info" class="q-pa-none sidebar-panel">
+              <MeasureResults />
+              <InterpretationResults />
+            </q-tab-panel>
+            <q-tab-panel name="graphs" class="q-pa-none sidebar-panel sidebar-graph-panel">
+              <ResultsGraphs :rows="graphRows" :selected-record-nos="graphSelectedRecordNos"
+                :focused-record-no="graphFocusedRecordNo" fill @focus-record="onGraphFocus"
+                @open-window="bus.emit('open-graphs-window')" />
+            </q-tab-panel>
+          </q-tab-panels>
+        </div>
         <div class="drawer-resize-handle" title="Изменить ширину панели"
           @pointerdown="startDrawerResize" @dblclick="resetDrawerWidth"></div>
       </div>
@@ -78,10 +94,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, inject } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, inject, watch, defineAsyncComponent } from "vue";
 import { useQuasar } from "quasar";
 import MeasureResults from "@/components/MeasureResults.vue";
 import InterpretationResults from "@/components/InterpretationResults.vue";
+const ResultsGraphs = defineAsyncComponent(
+  () => import("@/components/results/ResultsGraphs.vue"),
+);
 import {
   getGuidesVisibility,
   setGuideVisible,
@@ -109,6 +128,7 @@ function onToggleTheme() {
 // const bus = inject('bus')
 // import EssentialLink from '@/components/EssentialLink.vue'
 const leftDrawerOpen = ref(true);
+const sidebarTab = ref("info");
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;
 }
@@ -210,6 +230,43 @@ onMounted(() => {
 // --- Управление размером точек и линий ---
 const bus = inject("bus");
 
+// --- Данные для вкладки графиков в sidebar ---------------------------------
+const graphRows = ref({ lateral: [], dorsal: [] });
+const graphSelectedRecordNos = ref([]);
+const graphFocusedRecordNo = ref(null);
+
+const onGraphFocus = (recordNo) => {
+  graphFocusedRecordNo.value = recordNo;
+  bus.emit("graphs-focus-record", recordNo);
+};
+
+const onGraphsState = (state) => {
+  if (!state) return;
+  graphRows.value = state.rows || { lateral: [], dorsal: [] };
+  graphSelectedRecordNos.value = state.selectedRecordNos || [];
+  graphFocusedRecordNo.value = state.focusedRecordNo ?? null;
+};
+
+bus.on("graphs-state", onGraphsState);
+
+watch(
+  () => graphSelectedRecordNos.value.length,
+  (count, previous) => {
+    if (count === 0) {
+      if (sidebarTab.value === "graphs") sidebarTab.value = "info";
+      return;
+    }
+    if (count > 1 && previous <= 1) {
+      leftDrawerOpen.value = true;
+      sidebarTab.value = "graphs";
+    }
+  },
+);
+
+onBeforeUnmount(() => {
+  bus.off("graphs-state", onGraphsState);
+});
+
 // Команды из меню Electron «Файл» пробрасываем в шину приложения,
 // чтобы их обработал IndexPage теми же функциями, что и кнопки шапки.
 const disposeProjectMenu = window.otriProject?.onProjectAction?.((action) => {
@@ -243,6 +300,34 @@ function onLineScale(value) {
 <style scoped>
 .drawer-inner {
   position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-panels {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sidebar-panels :deep(.q-tab-panel) {
+  height: 100%;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.sidebar-graph-panel {
+  overflow: hidden;
+}
+
+.sidebar-graph-panel :deep(.graphs-card) {
   height: 100%;
 }
 

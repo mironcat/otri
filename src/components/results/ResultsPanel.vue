@@ -8,10 +8,10 @@
         @update:show-description="descriptionVisible = $event" />
       <DescriptionPanel :visible="descriptionVisible" :descriptions="descriptionsModel"
         :selected-description-id="selectedDescriptionIdModel" :description="selectedDescription"
-        :editor-mode="descriptionEditor" :graphs-visible="graphsVisible" :graphs-available="graphsAvailable"
+        :editor-mode="descriptionEditor"
         @update:selected-description-id="selectedDescriptionIdModel = $event"
         @toggle-description-editor="descriptionEditor = !descriptionEditor"
-        @toggle-graphs="emit('toggle-graphs')" @delete-description="deleteDescription" />
+        @delete-description="deleteDescription" />
     </div>
   </div>
 </template>
@@ -30,8 +30,6 @@ const props = defineProps({
   rows: { type: Object, required: true },
   selectedRecordNos: { type: Array, default: () => [] },
   activeRecordNo: { type: Number, default: null },
-  canvasHidden: { type: Boolean, default: false },
-  graphsVisible: { type: Boolean, default: false },
   descriptions: { type: Array, default: () => [] },
   selectedDescriptionId: { type: String, default: null },
   showDescription: { type: Boolean, default: true },
@@ -42,7 +40,6 @@ const emit = defineEmits([
   "update:descriptions",
   "update:selectedDescriptionId",
   "update:showDescription",
-  "toggle-graphs",
   "focus-record",
   "edit-record",
   "delete-record",
@@ -52,9 +49,6 @@ const selectedNos = computed({
   get: () => props.selectedRecordNos,
   set: (value) => emit("update:selectedRecordNos", value || []),
 });
-
-// Графики имеют смысл при наличии более одной записи в наборе для описания
-const graphsAvailable = computed(() => selectedNos.value.length > 1);
 
 const descriptionsModel = computed({
   get: () => props.descriptions,

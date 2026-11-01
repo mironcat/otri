@@ -40,19 +40,12 @@
         <q-tooltip>{{ canvasHidden ? 'Показать холст' : 'Скрыть холст' }}</q-tooltip>
       </q-btn>
     </div>
-    <div v-show="!canvasHidden || showGraphs" class="canvas-workspace row no-wrap">
-      <div v-if="showGraphs" class="graphs-panel q-ma-md" :class="{ 'graphs-panel--full': canvasHidden }">
-        <ResultsGraphs :rows="rows" :selected-record-nos="selectedRecordNos"
-          :focused-record-no="focusedRecordNo" @focus-record="focusedRecordNo = $event"
-          @open-window="showGraphsWindow = true" />
-      </div>
-      <div v-show="!canvasHidden" class="col q-ma-md canvas-row">
-        <div id="canvas" ref="canvasRef"></div>
-        <q-btn class="canvas-fab" round unelevated color="primary" icon="add_box" :disable="!activeFrameHidden"
-          title="Создать рамку" aria-label="Создать рамку" @click="createActiveFrame">
-          <q-tooltip>Новый фрейм</q-tooltip>
-        </q-btn>
-      </div>
+    <div v-show="!canvasHidden" class="row q-ma-md canvas-row">
+      <div id="canvas" ref="canvasRef"></div>
+      <q-btn class="canvas-fab" round unelevated color="primary" icon="add_box" :disable="!activeFrameHidden"
+        title="Создать рамку" aria-label="Создать рамку" @click="createActiveFrame">
+        <q-tooltip>Новый фрейм</q-tooltip>
+      </q-btn>
     </div>
     <div class="row q-ma-md q-gutter-sm flex items-center">
       <q-file bg-color="secondary" dense v-model="imagefile" label="Выберите файл" filled style="max-width: 400px"
@@ -79,10 +72,9 @@
       <!-- <q-chip>{{ scales.factor }}</q-chip> -->
     </div>
     <ResultsPanel v-show="showTables" :class="{ 'tables-panel--expanded': canvasHidden }" :rows="rows"
-      :active-record-no="activeRecordNo" :canvas-hidden="canvasHidden" :graphs-visible="showGraphs"
-      v-model:selected-record-nos="selectedRecordNos" v-model:descriptions="generatedDescriptions"
-      v-model:selected-description-id="selectedDescriptionId" v-model:show-description="showDescription"
-      @toggle-graphs="toggleGraphs" @focus-record="focusedRecordNo = $event"
+      :active-record-no="activeRecordNo" v-model:selected-record-nos="selectedRecordNos"
+      v-model:descriptions="generatedDescriptions" v-model:selected-description-id="selectedDescriptionId"
+      v-model:show-description="showDescription" @focus-record="focusedRecordNo = $event"
       @edit-record="activateRecord" @delete-record="confirmDeleteRecord" />
     <q-dialog v-model="showGraphsWindow" transition-show="scale" transition-hide="scale">
       <div ref="graphWindowRef" class="graph-window">
@@ -182,10 +174,28 @@ const selectedDescriptionId = ref(null);
 const activeFrameHidden = ref(false);
 // Холст можно скрыть, чтобы освободить место для таблицы и описания
 const canvasHidden = ref(false);
-// Панель графиков слева от холста
-const showGraphs = ref(false);
 // Отдельное окно с графиками
 const showGraphsWindow = ref(false);
+
+// Передаём данные графиков в sidebar (MainLayout)
+const emitGraphsState = () => {
+  bus.emit("graphs-state", {
+    rows: rows.value,
+    selectedRecordNos: [...selectedRecordNos.value],
+    focusedRecordNo: focusedRecordNo.value,
+  });
+};
+watch([rows, selectedRecordNos, focusedRecordNo], emitGraphsState, {
+  deep: true,
+  immediate: true,
+});
+
+bus.on("graphs-focus-record", (recordNo) => {
+  focusedRecordNo.value = recordNo;
+});
+bus.on("open-graphs-window", () => {
+  showGraphsWindow.value = true;
+});
 
 // Поиск индекса строки в массиве rows по номеру записи
 const findRowIdx = (arr, recordNo) => {
@@ -717,11 +727,6 @@ const toggleCanvas = () => {
   }
 };
 
-// Панель графиков можно открывать независимо от видимости холста
-const toggleGraphs = () => {
-  showGraphs.value = !showGraphs.value;
-};
-
 // Ручное изменение размеров окна графиков (CSS resize в q-dialog
 // растягивал только высоту, поэтому используем pointer-события).
 let graphResizeState = null;
@@ -766,24 +771,15 @@ const startGraphResize = (event) => {
 
 onBeforeUnmount(stopGraphResize);
 
-// Если в наборе для описания осталась одна запись, графики закрываем
+// Если в наборе для описания осталась одна запись, окно графиков закрываем
 watch(
   () => selectedRecordNos.value.length,
   (count) => {
     if (count <= 1) {
-      showGraphs.value = false;
       showGraphsWindow.value = false;
     }
   },
 );
-
-// Если результаты скрыты, кнопка управления графиками тоже недоступна
-watch(showTables, (visible) => {
-  if (!visible) {
-    showGraphs.value = false;
-    showGraphsWindow.value = false;
-  }
-});
 
 // Привести размеры точек/линий всех наборов к текущим множителям
 // и текущему масштабу групп (чтобы при зуме с замком они не росли).
@@ -1986,13 +1982,6 @@ image {
 
 /* Ряд канваса не должен зависеть от размера SVG: иначе явная высота
    svg через intrinsic size увеличивает страницу и появляются скроллбары */
-/* Рабочая область: графики слева, холст справа */
-.canvas-workspace {
-  flex: 1 1 0%;
-  min-height: 0;
-  display: flex;
-}
-
 .canvas-row {
   position: relative;
   flex: 1 1 0%;
@@ -2013,22 +2002,6 @@ image {
   top: 12px;
   left: 12px;
   z-index: 2;
-}
-
-/* Панель графиков слева от холста */
-.graphs-panel {
-  flex: 0 0 34%;
-  min-width: 320px;
-  max-width: 520px;
-  min-height: 0;
-  display: flex;
-  overflow: auto;
-}
-
-/* Если холст скрыт, графики занимают всю рабочую область */
-.graphs-panel--full {
-  flex: 1 1 auto;
-  max-width: none;
 }
 
 /* Отдельное окно графиков: размеры меняются за правый нижний угол */

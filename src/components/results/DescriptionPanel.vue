@@ -7,15 +7,6 @@
         label="Редактор описания" @click="emit('toggle-description-editor')">
         <q-tooltip>{{ editorMode ? 'Вернуть обычную ширину' : 'Развернуть область описания' }}</q-tooltip>
       </q-btn>
-      <q-btn size="sm" no-caps class="q-mr-sm" :color="graphsVisible ? 'secondary' : 'primary'"
-        :label="graphsVisible ? 'Скрыть графики' : 'Показать графики'" :disable="!graphsAvailable"
-        @click="emit('toggle-graphs')">
-        <q-tooltip>
-          {{ graphsAvailable
-            ? (graphsVisible ? 'Скрыть панель графиков' : 'Показать панель графиков')
-            : 'Выберите более одной записи для описания' }}
-        </q-tooltip>
-      </q-btn>
       <q-select :model-value="selectedDescriptionId" :options="descriptions" option-value="id"
         option-label="name" emit-value map-options dense outlined options-dense label="Описание"
         :disable="descriptions.length === 0" class="record-select"
@@ -43,14 +34,11 @@ defineProps({
   selectedDescriptionId: { type: String, default: null },
   description: { type: Object, default: null },
   editorMode: { type: Boolean, default: false },
-  graphsVisible: { type: Boolean, default: false },
-  graphsAvailable: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
   "update:selected-description-id",
   "toggle-description-editor",
-  "toggle-graphs",
   "delete-description",
 ]);
 </script>

@@ -47,6 +47,12 @@
       <VueApexCharts class="graphs-chart" :key="chartKey" :type="chartType" :height="chartHeight"
         :options="chartOptions" :series="series" />
     </q-card-section>
+    <q-card-section v-if="hasData" class="graphs-card__height">
+      <div class="row items-center q-gutter-sm">
+        <q-icon name="height" size="18px" />
+        <q-slider v-model="chartHeight" :min="180" :max="900" :step="20" dense class="col" />
+      </div>
+    </q-card-section>
     <q-card-section v-else class="text-body2 text-grey-7">
       {{ records.length
         ? "Включите хотя бы одну метрику для отображения."
@@ -77,8 +83,8 @@ const orientation = ref("horizontal");
 const showLength = ref(true);
 const showHeight = ref(true);
 const showWidth = ref(true);
+const chartHeight = ref(320);
 const chartKey = computed(() => `${chartType.value}-${orientation.value}`);
-const chartHeight = computed(() => (props.fill ? "100%" : 320));
 
 const allRows = computed(() => mergeRowsByRecordNo(props.rows));
 
@@ -358,6 +364,7 @@ const chartOptions = computed(() => {
 }
 
 .graphs-card--fill {
+  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -375,6 +382,11 @@ const chartOptions = computed(() => {
 
 .graphs-card__chart {
   padding-top: 0;
+}
+
+.graphs-card__height {
+  padding-top: 0;
+  padding-bottom: 8px;
 }
 
 .graphs-record-card {
