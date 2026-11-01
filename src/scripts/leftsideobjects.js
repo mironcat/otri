@@ -94,7 +94,12 @@ export default function leftSideObjects(draw, om, scales, bus) {
     .fill("#fff")
     .addClass("side-label-bg")
     .addClass("svg-label-bg")
-    .attr({ "fill-opacity": 0.75, "pointer-events": "none" });
+    .attr({
+      "fill-opacity": 0.75,
+      "pointer-events": "none",
+      // базовый отступ подложки; масштаб группы компенсируется в geostyle.js
+      "data-base-pad": 2,
+    });
 
   // размеры подложки пересчитываются по локальному bbox текста
   const layoutSideLabelBg = () => {
@@ -109,7 +114,11 @@ export default function leftSideObjects(draw, om, scales, bus) {
       sideLabelBg.attr({ width: 0, height: 0 });
       return;
     }
-    const pad = 2;
+    // шрифт подписи постоянный на экране (компенсируется в geostyle.js),
+    // поэтому отступ тоже переводим в локальные единицы группы
+    const M = mobjects.matrixify();
+    const scale = Math.hypot(M.a, M.b) || 1;
+    const pad = 2 / scale;
     sideLabelBg.attr({
       x: bb.x - pad,
       y: bb.y - pad,
@@ -120,6 +129,18 @@ export default function leftSideObjects(draw, om, scales, bus) {
     });
   };
   layoutSideLabelBg();
+
+  // Подпись стороны держим над рамкой на постоянном экранном расстоянии.
+  // Размер шрифта компенсирует geostyle.js, здесь — отступ от верхнего края.
+  const syncSideLabel = () => {
+    const M = mobjects.matrixify();
+    const scale = Math.hypot(M.a, M.b) || 1;
+    sideLabel.attr({
+      x: baseFrame.attr("x"),
+      y: baseFrame.attr("y") - 17 / scale,
+    });
+    layoutSideLabelBg();
+  };
 
   const frameResizer = draw
     .rect(15, 15)
@@ -421,9 +442,13 @@ export default function leftSideObjects(draw, om, scales, bus) {
   });
   bus.on("side-change", (sidecolor) => {
     baseFrame.attr({ stroke: sidecolor });
-    sideLabel.text(om.value.side === "right" ? "правая сторона" : "левая сторона");
+    sideLabel.text(
+      om.value.side === "right" ? "правая сторона" : "левая сторона",
+    );
     updateMeasures();
   });
+  // при зуме отступ подписи стороны пересчитываем под новый масштаб группы
+  bus.on("overlays-transformed", syncSideLabel);
   pdTangentPoint.on("dragmove.namespace", function (event) {
     const attrs_bf = baseFrame.attr(["x", "y", "width", "height"]);
     constrainPointMovement(
@@ -555,11 +580,7 @@ export default function leftSideObjects(draw, om, scales, bus) {
     const factor = getGroupFactor(draw, scales, mobjects);
     lockIcon.position();
     updateAdditionalObjects();
-    sideLabel.attr({
-      x: baseFrame.attr("x"),
-      y: baseFrame.attr("y") - 17,
-    });
-    layoutSideLabelBg();
+    syncSideLabel();
     om.value.length = baseFrame.attr("width") * factor;
     om.value.height = baseFrame.attr("height") * factor;
     const bFA = baseFrame.attr(["x", "y", "width", "height"]);

@@ -2,8 +2,6 @@
   <q-page class="column canvas-page">
     <div class="row q-ml-md q-mt-md">
       <div class="q-gutter-sm">
-        <q-btn color="primary" @click="createActiveFrame" icon="add_box" :disable="!activeFrameHidden"
-          title="Создать рамку">НОВЫЙ ФРЕЙМ</q-btn>
         <q-btn color="secondary" @click="zoomIn" icon="zoom_in" />
         <q-btn color="secondary" @click="zoomOut" icon="zoom_out" />
         <q-btn color="secondary" @click="rotateImage(-0.5)" icon="rotate_left" />
@@ -40,6 +38,10 @@
     </div>
     <div class="row q-ma-md canvas-row">
       <div id="canvas" ref="canvasRef"></div>
+      <q-btn class="canvas-fab" round unelevated color="primary" icon="add_box" :disable="!activeFrameHidden"
+        title="Создать рамку" aria-label="Создать рамку" @click="createActiveFrame">
+        <q-tooltip>Новый фрейм</q-tooltip>
+      </q-btn>
     </div>
     <div class="row q-ma-md q-gutter-sm flex items-center">
       <q-file bg-color="secondary" dense v-model="imagefile" label="Выберите файл" filled style="max-width: 400px"
@@ -1577,11 +1579,11 @@ const buildProjectData = () => {
   const imgEl = draw.findOne("#mainimage");
   const imgRect = imgEl
     ? {
-        x: Number(imgEl.attr("x")) || 0,
-        y: Number(imgEl.attr("y")) || 0,
-        width: Number(imgEl.attr("width")) || 0,
-        height: Number(imgEl.attr("height")) || 0,
-      }
+      x: Number(imgEl.attr("x")) || 0,
+      y: Number(imgEl.attr("y")) || 0,
+      width: Number(imgEl.attr("width")) || 0,
+      height: Number(imgEl.attr("height")) || 0,
+    }
     : null;
   const m = mainimage.matrixify();
   const sm = scalebar.matrixify();
@@ -1611,10 +1613,10 @@ const buildProjectData = () => {
       resizerTransform: rm ? [rm.a, rm.b, rm.c, rm.d, rm.e, rm.f] : null,
       resizer: line && start && end
         ? {
-            line: line.attr(["x1", "y1", "x2", "y2"]),
-            start: start.attr(["x", "y"]),
-            end: end.attr(["x", "y"]),
-          }
+          line: line.attr(["x1", "y1", "x2", "y2"]),
+          start: start.attr(["x", "y"]),
+          end: end.attr(["x", "y"]),
+        }
         : null,
     },
     om: clonePlain(om.value),
@@ -2131,6 +2133,15 @@ image {
   position: absolute;
   inset: 0;
   overflow: hidden;
+}
+
+/* Плавающая кнопка создания рамки: верхний левый край канваса.
+   Без выпадающего меню — просто круглая иконка поверх SVG. */
+.canvas-fab {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
 }
 
 /* Нижняя панель: слева таблицы, справа текстовое описание.

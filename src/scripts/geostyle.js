@@ -7,6 +7,10 @@
 // замком группа умножается матрицей, и без компенсации точки/линии визуально
 // росли бы. Базовые (исходные) размеры запоминаются в data-атрибутах, поэтому
 // многократные пересчёты и пользовательские множители не накапливаются.
+//
+// Тем же обратным масштабом держатся постоянными ручка изменения размера рамки
+// (rect.ui-resizer), подписи (text.svg-label) и их подложки (rect.svg-label-bg):
+// на экране они не зависят от текущего увеличения.
 
 const state = { point: 1, line: 1 };
 
@@ -34,6 +38,10 @@ export function setLineScale(value) {
 
 const BASE_R = "data-base-r";
 const BASE_SW = "data-base-sw";
+const BASE_FONT = "data-base-font";
+const BASE_W = "data-base-w";
+const BASE_H = "data-base-h";
+const BASE_PAD = "data-base-pad";
 
 // Вернуть базовый размер элемента, запомнив его при первом обращении
 function baseValue(el, key, current) {
@@ -74,6 +82,45 @@ export function syncGroupStyle(group) {
     if (!(sw > 0)) return;
     const base = baseValue(el, BASE_SW, sw);
     el.attr("stroke-width", (base * state.line) / groupScale);
+  });
+
+  // ручка изменения размера рамки: экранный размер постоянный
+  group.find("rect.ui-resizer").forEach((el) => {
+    const w = Number(el.attr("width"));
+    const h = Number(el.attr("height"));
+    if (!(w > 0) || !(h > 0)) return;
+    el.attr({
+      width: baseValue(el, BASE_W, w) / groupScale,
+      height: baseValue(el, BASE_H, h) / groupScale,
+    });
+  });
+
+  // подписи: шрифт и подложка тоже не зависят от увеличения.
+  // Подложки кладутся рядом с текстом в том же порядке создания,
+  // поэтому пары текст/подложка сопоставляются по индексу.
+  const labelTexts = group.find("text.svg-label");
+  const labelBgs = group.find("rect.svg-label-bg");
+  labelTexts.forEach((el, i) => {
+    const size = Number(el.attr("font-size"));
+    if (!(size > 0)) return;
+    el.attr("font-size", baseValue(el, BASE_FONT, size) / groupScale);
+
+    const bg = labelBgs[i];
+    if (!bg) return;
+    let bb;
+    try {
+      bb = el.node.getBBox();
+    } catch (e) {
+      return;
+    }
+    if (!bb.width || !bb.height) return;
+    const pad = baseValue(bg, BASE_PAD, 3) / groupScale;
+    bg.attr({
+      x: bb.x - pad,
+      y: bb.y - pad,
+      width: bb.width + pad * 2,
+      height: bb.height + pad * 2,
+    });
   });
 }
 

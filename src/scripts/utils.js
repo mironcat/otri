@@ -220,11 +220,13 @@ function addLockToggle(
     .attr("text-anchor", "middle")
     .attr("pointer-events", "none");
 
-  const labelBg = draw
-    .rect(0, 0)
-    .fill("#fff")
-    .addClass("svg-label-bg")
-    .attr({ "fill-opacity": 0.75, "pointer-events": "none" });
+  const labelBg = draw.rect(0, 0).fill("#fff").addClass("svg-label-bg").attr({
+    "fill-opacity": 0.75,
+    "pointer-events": "none",
+    // базовый отступ подложки в локальных единицах; масштаб группы
+    // компенсируется в geostyle.js, чтобы поля оставались постоянными
+    "data-base-pad": 3,
+  });
 
   // замочек — зелёная полупрозрачная иконка, в одном стиле с «+»
   const fo = draw.foreignObject(SIZE, SIZE);
@@ -306,7 +308,9 @@ function addLockToggle(
     if (!visible) return;
     const M = mobjects.matrixify();
     const scale = Math.hypot(M.a, M.b) || 1;
-    const pad = isPinned() ? 3 : 3 / scale;
+    // шрифт подписи компенсируется масштабом группы (см. geostyle.js),
+    // поэтому отступ подложки тоже пересчитывается в локальные единицы
+    const pad = 3 / scale;
     const bb = measureLabel();
     labelBg.attr({
       x: bb.x - pad,
@@ -382,14 +386,18 @@ function addLockToggle(
     if (!om.value.settings.scalebar_ready) return;
 
     // bbox подписи в локальных координатах группы — поле ввода добавляем
-    // в ту же группу, поэтому оно совпадает с текстом при любом зуме/сдвиге
+    // в ту же группу, поэтому оно совпадает с текстом при любом зуме/сдвиге.
+    // Размеры поля делим на масштаб группы: на экране оно постоянно, как и
+    // сама подпись.
+    const M = mobjects.matrixify();
+    const scale = Math.hypot(M.a, M.b) || 1;
     const bb = labelEl.node.getBBox();
-    const width = Math.max(130, bb.width + 24);
-    const height = 22;
+    const width = Math.max(130 / scale, bb.width + 24 / scale);
+    const height = 22 / scale;
     labelEditFo = draw.foreignObject(width, height);
     labelEditFo.attr({
       x: bb.x + bb.width / 2 - width / 2,
-      y: bb.y - 4,
+      y: bb.y - 4 / scale,
       width,
       height,
     });
@@ -400,8 +408,9 @@ function addLockToggle(
     input.placeholder = "метка";
     input.style.cssText =
       "width:100%;height:100%;box-sizing:border-box;margin:0;" +
-      "border:1px solid #1976d2;border-radius:3px;padding:1px 5px;" +
-      "font:11px Arial;background:#fff;color:#000;outline:none;";
+      `border:${1 / scale}px solid #1976d2;border-radius:${3 / scale}px;` +
+      `padding:${1 / scale}px ${5 / scale}px;font:${11 / scale}px Arial;` +
+      "background:#fff;color:#000;outline:none;";
     labelEditFo.node.appendChild(input);
     labelEl.attr("opacity", "0");
     labelBg.attr("opacity", "0");
@@ -468,9 +477,10 @@ function addLockToggle(
     // «+» доступен только при заданном масштабе
     syncAddVisibility();
 
-    // текстовая подпись — центрирована над замочком
+    // текстовая подпись — центрирована над замочком; её размер постоянный,
+    // поэтому отступ от иконки тоже переводим в локальные единицы группы
     labelEl.attr("x", cx - w / 2);
-    labelEl.attr("y", cy - h / 2 - 4 * inv);
+    labelEl.attr("y", cy - h / 2 - 4 / scale);
     layoutLabel();
 
     // показать refresh, только если группа реально повёрнута
