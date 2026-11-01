@@ -173,18 +173,39 @@ export default defineConfig(function (/* ctx */) {
         appId: "otri",
         productName: "Otri",
         copyright: "Copyright © 2026 Eugeny Karasev",
+        // Установщик привязывает .otr к Otri: двойной клик по проекту
+        // открывает приложение с загруженным файлом.
+        fileAssociations: [
+          {
+            ext: "otr",
+            name: "Otri.Project",
+            description: "Проект Otri",
+            // путь относительно directories.buildResources (src-electron)
+            icon: "electron-assets/icons/icon.ico",
+            role: "Editor",
+            mimeType: "application/x-otri-project",
+          },
+        ],
         win: {
-          target: "portable",
+          target: "nsis",
           // arch задаётся в target или CLI (quasar build -m electron -T win32 --arch x64)
+        },
+        // Установка для всех пользователей (Program Files, UAC).
+        // Ассоциация .otr пишется в HKLM и удаляется вместе с приложением.
+        nsis: {
+          oneClick: true,
+          perMachine: true,
+          artifactName: "Otri-Setup-${version}-${arch}.${ext}",
+          createDesktopShortcut: true,
+          createStartMenuShortcut: true,
+          shortcutName: "Otri",
+          uninstallDisplayName: "Otri ${version}",
         },
         // Портативная папка: собирается и на Windows, и на Linux.
         // AppImage/deb при необходимости собираются на Linux или в CI.
         linux: {
           target: "dir",
           category: "Science",
-        },
-        portable: {
-          artifactName: "Otri-${version}-${arch}.exe",
         },
         // files задавать не нужно: Quasar уже указывает directories.app
         // = dist/electron/UnPackaged, electron-builder упаковывает всё из него

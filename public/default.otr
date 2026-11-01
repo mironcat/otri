@@ -1,0 +1,20 @@
+{
+  "format": "otri-project",
+  "version": 1,
+  "image": {
+    "path": "",
+    "name": "ost1.jpg",
+    "asset": "ost1.jpg",
+    "transform": [1, 0, 0, 1, 0, 0],
+    "rect": { "x": 300, "y": 100, "width": 400, "height": 400 }
+  },
+  "scalebar": null,
+  "om": {},
+  "scales": {},
+  "rows": { "lateral": [], "dorsal": [] },
+  "records": [],
+  "activeFrame": { "hidden": false, "recordId": 1, "sets": {} },
+  "activeRecordNo": null,
+  "selectedRecordNo": null,
+  "ui": { "showTables": false, "showDescription": true }
+}

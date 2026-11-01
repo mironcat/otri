@@ -20,11 +20,11 @@
     "build:electron:debug": "quasar build -m electron -d",
     "build:electron:ui": "quasar build -m electron -s",
     "clean": "quasar clean",
-    "package:win": "npm run build:electron && powershell Compress-Archive -Path \"dist/electron/Packaged/win-unpacked/*\" -DestinationPath \"dist/Otri_Windows_x64_Portable.zip\" -Force",
-    "zip:win": "powershell Compress-Archive -Path \"dist/electron/Packaged/win-unpacked/*\" -DestinationPath \"dist/Otri_Windows_x64_Portable.zip\" -Force",
+    "artifact:win": "powershell Copy-Item \"dist/electron/Packaged/Otri-Setup-*.exe\" \"dist/\" -Force",
+    "installer:win": "npm run build:electron:win64 && npm run artifact:win",
     "zip:linux": "powershell Compress-Archive -Path \"dist/electron/Packaged/linux-unpacked/*\" -DestinationPath \"dist/Otri_Linux_x64_Portable.zip\" -Force",
-    "release": "npm run clean && npm run build:electron:win64 && npm run zip:win && npm run build:electron:linux && npm run zip:linux",
-    "release:win": "npm run clean && npm run package:win"
+    "release": "npm run clean && npm run installer:win && npm run build:electron:linux && npm run zip:linux",
+    "release:win": "npm run clean && npm run installer:win"
   },
   "dependencies": {
     "@quasar/extras": "^2.1.0",

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <q-page class="column canvas-page">
     <div class="row q-ml-md q-mt-md">
       <div class="q-gutter-sm">
@@ -892,6 +892,14 @@ onMounted(() => {
   bus.emit("concave-vs", om.value.lateral_side & om.value.concave_vs);
   bus.emit("dorsal-show", om.value.dorsal_side);
   // this.console.log(canvasRef.value)
+
+  // Открытие .otr извне (ассоциация файлов, «Открыть с помощью»).
+  // Подписка — до rendererReady, чтобы не потерять отложенный файл.
+  disposeExternalProjectOpen = window.otriProject?.onOpenProject?.(
+    onExternalProjectOpen,
+  );
+  disposeCloseRequest = window.otriProject?.onCloseRequest?.(onCloseRequest);
+  void window.otriProject?.rendererReady?.();
 });
 
 onBeforeUnmount(() => {
@@ -905,6 +913,14 @@ onBeforeUnmount(() => {
   bus.off("add-record", handleRecordAction);
   bus.off("save-project", saveProject);
   bus.off("open-project", openProject);
+  if (typeof disposeExternalProjectOpen === "function") {
+    disposeExternalProjectOpen();
+    disposeExternalProjectOpen = null;
+  }
+  if (typeof disposeCloseRequest === "function") {
+    disposeCloseRequest();
+    disposeCloseRequest = null;
+  }
 });
 
 // Обновить существующую запись новыми измерениями и геометрией
@@ -1403,6 +1419,10 @@ const setScaleBar = () => {
 let currentImageUrl = null;
 let currentImagePath = "";
 let currentProjectPath = "";
+let disposeExternalProjectOpen = null;
+let disposeCloseRequest = null;
+// подпись последнего сохранённого/загруженного состояния проекта
+let savedProjectState = null;
 
 const clonePlain = (value) => JSON.parse(JSON.stringify(value));
 
@@ -1522,6 +1542,35 @@ const buildProjectData = () => {
   };
 };
 
+// Подпись состояния проекта для отслеживания несохранённых изменений.
+// Служебные поля (время, вид панелей, выбранная запись) правками не считаем.
+const projectStateSignature = () => {
+  const data = buildProjectData();
+  delete data.createdAt;
+  delete data.ui;
+  delete data.selectedRecordNo;
+  delete data.activeRecordNo;
+  if (data.activeFrame) delete data.activeFrame.hidden;
+  return JSON.stringify(data);
+};
+
+const markProjectSaved = () => {
+  try {
+    savedProjectState = projectStateSignature();
+  } catch {
+    savedProjectState = null;
+  }
+};
+
+const hasUnsavedChanges = () => {
+  if (savedProjectState === null) return false;
+  try {
+    return projectStateSignature() !== savedProjectState;
+  } catch {
+    return false;
+  }
+};
+
 const saveProject = async () => {
   if (!window.otriProject?.save) {
     $q.notify({
@@ -1529,7 +1578,7 @@ const saveProject = async () => {
       color: "warning",
       icon: "warning",
     });
-    return;
+    return false;
   }
   try {
     const data = buildProjectData();
@@ -1557,19 +1606,22 @@ const saveProject = async () => {
       data,
       currentProjectPath || undefined,
     );
-    if (res?.canceled) return;
+    if (res?.canceled) return false;
     currentProjectPath = res.filePath || currentProjectPath;
+    markProjectSaved();
     $q.notify({
       message: `Проект сохранён: ${res.filePath}`,
       color: "positive",
       icon: "save",
     });
+    return true;
   } catch (err) {
     $q.notify({
       message: `Не удалось сохранить проект: ${err.message}`,
       color: "negative",
       icon: "error",
     });
+    return false;
   }
 };
 
@@ -1743,6 +1795,20 @@ const restoreProject = async (project, filePath) => {
   bus.emit("measure-updated", om.value);
 };
 
+// Загрузка проекта: используется и диалогом «Открыть», и файлом,
+// который система передала приложению (ассоциация .otr).
+const loadProjectFile = async (data, filePath, { notify = true } = {}) => {
+  await restoreProject(data, filePath);
+  markProjectSaved();
+  if (notify) {
+    $q.notify({
+      message: filePath ? `Проект загружен: ${filePath}` : "Проект загружен",
+      color: "positive",
+      icon: "folder_open",
+    });
+  }
+};
+
 const openProject = async () => {
   if (!window.otriProject?.open) {
     $q.notify({
@@ -1755,12 +1821,7 @@ const openProject = async () => {
   try {
     const res = await window.otriProject.open();
     if (res?.canceled) return;
-    await restoreProject(res.data, res.filePath);
-    $q.notify({
-      message: "Проект загружен",
-      color: "positive",
-      icon: "folder_open",
-    });
+    await loadProjectFile(res.data, res.filePath);
   } catch (err) {
     $q.notify({
       message: `Не удалось открыть проект: ${err.message}`,
@@ -1768,6 +1829,47 @@ const openProject = async () => {
       icon: "error",
     });
   }
+};
+
+// Проект, открытый извне: двойной клик по .otr, «Открыть с помощью»
+// или повторный запуск приложения с файлом. Проект по умолчанию
+// (isDefault) грузится без уведомления и не считается сохранённым файлом.
+const onExternalProjectOpen = (payload) => {
+  if (!payload) return;
+  if (payload.error) {
+    $q.notify({
+      message: `Не удалось открыть проект: ${payload.error}`,
+      color: "negative",
+      icon: "error",
+    });
+    return;
+  }
+  const isDefault = Boolean(payload.isDefault);
+  void loadProjectFile(payload.data, isDefault ? "" : payload.filePath, {
+    notify: !isDefault,
+  }).catch((err) => {
+    $q.notify({
+      message: `Не удалось открыть проект: ${err.message}`,
+      color: "negative",
+      icon: "error",
+    });
+  });
+};
+
+// Закрытие окна: main-процесс спрашивает, сохранять ли изменения.
+const onCloseRequest = async () => {
+  if (!window.otriProject?.respondToClose) return;
+  if (!hasUnsavedChanges() || !window.otriProject.confirmClose) {
+    void window.otriProject.respondToClose(true);
+    return;
+  }
+  const decision = await window.otriProject.confirmClose();
+  if (decision === "save") {
+    const saved = await saveProject();
+    void window.otriProject.respondToClose(saved === true);
+    return;
+  }
+  void window.otriProject.respondToClose(decision === "discard");
 };
 
 // Кнопки сохранения/открытия находятся в шапке MainLayout

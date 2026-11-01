@@ -38,6 +38,24 @@ contextBridge.exposeInMainWorld('otriProject', {
   save: (data, filePath) => ipcRenderer.invoke('project:save', { data, filePath }),
   open: () => ipcRenderer.invoke('project:open'),
   readImage: (filePath) => ipcRenderer.invoke('image:read', filePath),
+  // проект, открытый извне: двойной клик по .otr, «Открыть с помощью»,
+  // повторный запуск приложения с файлом
+  onOpenProject: (callback) => {
+    const handler = (_event, payload) => callback(payload)
+    ipcRenderer.on('project:open-request', handler)
+    return () => ipcRenderer.removeListener('project:open-request', handler)
+  },
+  // сообщаем main-процессу, что страница готова принять отложенный проект
+  rendererReady: () => ipcRenderer.invoke('project:renderer-ready'),
+  // закрытие окна: main спрашивает, сохранять ли изменения
+  onCloseRequest: (callback) => {
+    const handler = () => callback()
+    ipcRenderer.on('app:close-request', handler)
+    return () => ipcRenderer.removeListener('app:close-request', handler)
+  },
+  confirmClose: () => ipcRenderer.invoke('app:confirm-close'),
+  respondToClose: (allow) =>
+    ipcRenderer.invoke('app:close-response', allow === true),
   // команды из меню приложения (Файл → Открыть/Сохранить проект)
   onProjectAction: (callback) => {
     const handler = (_event, action) => callback(action)
