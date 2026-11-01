@@ -191,12 +191,12 @@ const degrees = (value) => {
 }
 
 .description-record {
-  color: #555;
+  color: var(--otri-text-muted);
   margin-bottom: 8px;
 }
 
 .description-empty {
-  color: #777;
+  color: var(--otri-text-subtle);
   font-size: 13px;
 }
 </style>

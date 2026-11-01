@@ -21,6 +21,7 @@ import {
   getLineFromAnglePoint,
   constrainPointMovement,
   addLockToggle,
+  getGroupFactor,
 } from "@/scripts/utils.js";
 import { applyScales, getLineScale } from "@/scripts/geostyle.js";
 export default function DorsalSideObjects(draw, om, scales, bus) {
@@ -502,10 +503,11 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
     ]);
   }
   function updateMeasures() {
+    const factor = getGroupFactor(draw, scales, mobjects);
     lockIcon.position();
     updateAdditionalObjects();
-    om.value.length_dorsal = baseFrame.attr("width") * scales.value.factor;
-    om.value.width = baseFrame.attr("height") * scales.value.factor;
+    om.value.length_dorsal = baseFrame.attr("width") * factor;
+    om.value.width = baseFrame.attr("height") * factor;
     const bFA = baseFrame.attr(["x", "y", "width", "height"]);
     const p = {
       //coordinates of baseFrame corner points
@@ -552,15 +554,15 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
       ) - 360,
     );
     // hc
-    om.value.ar.hc = (rPMC.attr("cx") - p.ad.x) * scales.value.factor;
-    om.value.al.hc = (lPMC.attr("cx") - p.av.x) * scales.value.factor;
-    om.value.pr.hc = (p.pd.x - rPMC.attr("cx")) * scales.value.factor;
-    om.value.pl.hc = (p.pv.x - lPMC.attr("cx")) * scales.value.factor;
+    om.value.ar.hc = (rPMC.attr("cx") - p.ad.x) * factor;
+    om.value.al.hc = (lPMC.attr("cx") - p.av.x) * factor;
+    om.value.pr.hc = (p.pd.x - rPMC.attr("cx")) * factor;
+    om.value.pl.hc = (p.pv.x - lPMC.attr("cx")) * factor;
     // vc
-    om.value.ar.vc = (aPMC.attr("cy") - p.ad.y) * scales.value.factor;
-    om.value.al.vc = (p.av.y - aPMC.attr("cy")) * scales.value.factor;
-    om.value.pr.vc = (pPMC.attr("cy") - p.pd.y) * scales.value.factor;
-    om.value.pl.vc = (p.pv.y - pPMC.attr("cy")) * scales.value.factor;
+    om.value.ar.vc = (aPMC.attr("cy") - p.ad.y) * factor;
+    om.value.al.vc = (p.av.y - aPMC.attr("cy")) * factor;
+    om.value.pr.vc = (pPMC.attr("cy") - p.pd.y) * factor;
+    om.value.pl.vc = (p.pv.y - pPMC.attr("cy")) * factor;
     // ln
     om.value.ar.ln =
       getLengthByCoordinates({
@@ -568,28 +570,28 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
         y1: p.ad.y,
         x2: adCrossPoint.attr("cx"),
         y2: adCrossPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.pr.ln =
       getLengthByCoordinates({
         x1: p.pd.x,
         y1: p.pd.y,
         x2: pdCrossPoint.attr("cx"),
         y2: pdCrossPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.al.ln =
       getLengthByCoordinates({
         x1: p.av.x,
         y1: p.av.y,
         x2: avCrossPoint.attr("cx"),
         y2: avCrossPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.pl.ln =
       getLengthByCoordinates({
         x1: p.pv.x,
         y1: p.pv.y,
         x2: pvCrossPoint.attr("cx"),
         y2: pvCrossPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     // sln
     om.value.ar.sln =
       getLengthByCoordinates({
@@ -597,28 +599,28 @@ export default function DorsalSideObjects(draw, om, scales, bus) {
         y1: p.ad.y,
         x2: adTangentPoint.attr("cx"),
         y2: adTangentPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.pr.sln =
       getLengthByCoordinates({
         x1: p.pd.x,
         y1: p.pd.y,
         x2: pdTangentPoint.attr("cx"),
         y2: pdTangentPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.al.sln =
       getLengthByCoordinates({
         x1: p.av.x,
         y1: p.av.y,
         x2: avTangentPoint.attr("cx"),
         y2: avTangentPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.pl.sln =
       getLengthByCoordinates({
         x1: p.pv.x,
         y1: p.pv.y,
         x2: pvTangentPoint.attr("cx"),
         y2: pvTangentPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     bus.emit("measure-updated", om.value);
   }
   function show(visible) {

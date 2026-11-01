@@ -45,14 +45,20 @@
           </q-btn> -->
         </q-btn-group>
 
-        <q-input class="q-mx-lg" bg-color="white" dense filled type="number" v-model="pointScale" label="Точки"
+        <q-input class="q-mx-lg" :bg-color="inputBgColor" dense filled type="number" v-model="pointScale" label="Точки"
           :min="0.25" :max="4" :step="0.25" @update:model-value="onPointScale" />
-        <q-input class="q-mr-md" bg-color="white" dense filled type="number" v-model="lineScale" label="Линии"
+        <q-input class="q-mr-md" :bg-color="inputBgColor" dense filled type="number" v-model="lineScale" label="Линии"
           :min="0.25" :max="4" :step="0.25" @update:model-value="onLineScale" />
 
+        <q-space />
 
+        <q-btn flat dense round :icon="$q.dark.isActive ? 'light_mode' : 'dark_mode'"
+          :aria-label="$q.dark.isActive ? 'Включить светлую тему' : 'Включить тёмную тему'"
+          :aria-pressed="$q.dark.isActive" @click="onToggleTheme">
+          <q-tooltip>{{ $q.dark.isActive ? "Светлая тема" : "Тёмная тема" }}</q-tooltip>
+        </q-btn>
 
-        <div class="q-ml-auto"> Otri <small>v{{ version }}</small> </div>
+        <div class="q-ml-sm"> Otri <small>v{{ version }}</small> </div>
       </q-toolbar>
     </q-header>
 
@@ -68,7 +74,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, inject, computed } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, inject } from "vue";
+import { useQuasar } from "quasar";
 import MeasureResults from "@/components/MeasureResults.vue";
 import InterpretationResults from "@/components/InterpretationResults.vue";
 import {
@@ -87,7 +94,14 @@ import {
   setLineScale,
 } from "../scripts/geostyle";
 import { APP_VERSION } from "../config/version";
+import { toggleTheme } from "../scripts/theme";
 const version = APP_VERSION;
+const $q = useQuasar();
+// В тёмной теме поля в шапке не должны оставаться белыми
+const inputBgColor = computed(() => ($q.dark.isActive ? "grey-9" : "white"));
+function onToggleTheme() {
+  toggleTheme($q);
+}
 // const bus = inject('bus')
 // import EssentialLink from '@/components/EssentialLink.vue'
 const leftDrawerOpen = ref(true);
@@ -128,9 +142,6 @@ onBeforeUnmount(() => {
 
 const pointScale = ref(getPointScale());
 const lineScale = ref(getLineScale());
-const styleChanged = computed(
-  () => pointScale.value !== 1 || lineScale.value !== 1,
-);
 
 function onPointScale(value) {
   // prev берём из состояния геостиля: v-model уже обновил ref

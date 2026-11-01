@@ -18,7 +18,6 @@ function lineTolineIntersectionPoint({ x1, y1, x2, y2, x3, y3, x4, y4 }) {
   }
 
   let ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denominator;
-  let ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denominator;
 
   // is the intersection along the segments
   // if (ua < 0 || ua > 1 || ub < 0 || ub > 1) {
@@ -217,12 +216,14 @@ function addLockToggle(
     .text("")
     .font({ size: 11, family: "Arial" })
     .fill("rgba(0,0,0,0.8)")
+    .addClass("svg-label")
     .attr("text-anchor", "middle")
     .attr("pointer-events", "none");
 
   const labelBg = draw
     .rect(0, 0)
     .fill("#fff")
+    .addClass("svg-label-bg")
     .attr({ "fill-opacity": 0.75, "pointer-events": "none" });
 
   // замочек — зелёная полупрозрачная иконка, в одном стиле с «+»
@@ -560,6 +561,30 @@ function addLockToggle(
   };
 }
 
+/**
+ * Множитель для перевода локальных координат группы в физические единицы.
+ *
+ * scales.factor хранит физические единицы на пиксель исходного изображения.
+ * Геометрия рамки задана в её локальных координатах, поэтому сначала переводим
+ * локальную дельту в координаты изображения:
+ *   group-local -> root (матрица группы) -> image-local (обратная матрица картинки)
+ * и умножаем на масштаб этого перехода. Так результат не зависит от текущего
+ * увеличения и корректно учитывает запертые (pinned) рамки.
+ */
+function getGroupFactor(draw, scales, group) {
+  const factor = Number(scales?.value?.factor) || 1;
+  if (!draw || !group) return factor;
+  try {
+    const image = draw.findOne("#maig");
+    if (!image) return factor;
+    const toImage = image.matrixify().inverseO().multiplyO(group.matrixify());
+    const scale = Math.hypot(toImage.a, toImage.b);
+    return Number.isFinite(scale) && scale > 0 ? factor * scale : factor;
+  } catch (e) {
+    return factor;
+  }
+}
+
 export {
   lineTolineIntersectionPoint,
   getAngleBetweenPoints,
@@ -570,4 +595,5 @@ export {
   constrainPointMovement,
   constrainVerticalPointMovement,
   addLockToggle,
+  getGroupFactor,
 };

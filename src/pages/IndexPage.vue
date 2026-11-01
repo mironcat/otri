@@ -34,7 +34,8 @@
         <q-checkbox v-model="om.dorsal_side" @click="bus.emit('dorsal-show', om.dorsal_side)" label="Дорсальная"
           color="green" />
         <q-checkbox v-show="om.dorsal_side" v-model="om.half"
-          @click="om.half ? (om.fullness = 'half') : (om.fullness = 'full')" label="Половина" color="black" />
+          @click="om.half ? (om.fullness = 'half') : (om.fullness = 'full')" label="Половина"
+          :color="$q.dark.isActive ? 'grey-4' : 'black'" />
       </div>
     </div>
     <div class="row q-ma-md canvas-row">
@@ -48,7 +49,7 @@
         </template>
       </q-file>
       <q-input dense v-model="scales.length" label="Длина масштабной линейки" type="number" filled
-        style="max-width: 150px" />
+        style="max-width: 150px" @change="onScalebarLengthEdited" />
 
       <q-btn color="primary" @click="setScaleBar" label="Задать масштаб" />
       <q-input v-show="om.settings.scalebar_ready" dense v-model="om.label" filled label="Метка"
@@ -243,6 +244,7 @@ import {
   initScalebar,
   getScalebarLength,
   positionScalebarBurned,
+  updateScalebarBurned,
 } from "@/scripts/scalebar.js";
 import leftSideObjects from "@/scripts/leftsideobjects.js";
 import DorsalSideObjects from "@/scripts/dorsalobjects.js";
@@ -388,6 +390,9 @@ const rowClass = computed(
   () => (row) =>
     row.record_no === selectedRecordNo.value ? "selected-record-row" : "",
 );
+// length — заданная физическая длина линейки;
+// factor — физических единиц на пиксель исходного изображения (не экрана);
+// zoom — относительное увеличение (для служебных нужд, на калибровку не влияет).
 const scales = ref({
   length: 100,
   factor: 1,
@@ -661,6 +666,7 @@ const makeFrozenClone = (obj, recordNo, key) => {
   if (!obj || !obj.mobjects) return null;
   const clone = obj.mobjects.clone();
   clone.attr({ id: `frozen-${key}-${recordNo}`, "data-record": recordNo });
+  clone.addClass("frozen-clone");
   stripFrozenHelpers(clone);
   clone.attr({ "pointer-events": "none", opacity: "0.75", "aria-hidden": "true" });
   obj.mobjects.before(clone);
@@ -1173,11 +1179,29 @@ const deleteRecord = (row) => {
     bus.emit("record-edit-state", { editing: false });
   }
 };
-const getFactor = () => {
-  scales.value.factor =
-    scales.value.length /
-    (getScalebarLength(scalebar, scales) * scales.value.zoom);
+const getFactor = (recompute = true) => {
+  // Калибровку пересчитываем только когда меняется сама линейка, а не при
+  // зуме: масштаб хранится в физических единицах на пиксель изображения.
+  if (recompute) {
+    const imagePixels = getScalebarLength(scalebar, draw, scales);
+    const physical = Number(scales.value.length);
+    if (
+      Number.isFinite(imagePixels) &&
+      imagePixels > 0 &&
+      Number.isFinite(physical) &&
+      physical > 0
+    ) {
+      scales.value.factor = physical / imagePixels;
+    }
+  }
+  updateScalebarBurned(draw, scalebar, scales);
   positionScalebarBurned(draw, scalebar);
+  // после изменения масштаба пересчитываем открытые измерения
+  if (om.value.settings.scalebar_ready) {
+    if (lso) lso.updateMeasures();
+    if (concave_lso) concave_lso.updateMeasures();
+    if (dso) dso.updateMeasures();
+  }
 };
 
 // Группы векторных оверлеев (точки, рамки, линии) с привязкой к рамке.
@@ -1188,11 +1212,19 @@ const followTargets = () => [
   { frame: "dorsal", group: dso && dso.mobjects },
 ].filter((t) => t.group);
 
-// Только группы, у которых включён замок следования за картинкой
-const pinnedGroups = () =>
-  followTargets()
+// Только группы, у которых включён замок следования за картинкой.
+// Красная масштабная линейка тоже «запирается» на изображении, но не с самого
+// начала: режим замочка включается после нажатия «Задать масштаб».
+const pinnedGroups = () => {
+  const groups = followTargets()
     .filter((t) => om.value.settings.pinToImage[t.frame])
     .map((t) => t.group);
+  if (om.value.settings.scalebar_ready && scalebar) {
+    const resizer = scalebar.get(0);
+    if (resizer) groups.push(resizer);
+  }
+  return groups;
+};
 
 // Смещение в локальных координатах группы -> вектор в координатах холста.
 // Нужно, чтобы рамка и картинка двигались вместе даже после поворота/зума.
@@ -1212,24 +1244,33 @@ const moveGroupByScreenDelta = (group, sx, sy) => {
   group.dmove(p1.x - p0.x, p1.y - p0.y);
 };
 
+// Точка экрана -> локальные координаты картинки: нужна, чтобы при зуме
+// колесом точка под курсором оставалась на месте.
+const imagePointUnderCursor = (event) => {
+  const ctm = mainimage.node.getScreenCTM();
+  if (!ctm) return null;
+  const p = new Point(event.clientX, event.clientY).transform(
+    new Matrix(ctm).inverse(),
+  );
+  return Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
+};
+
 // Зум меняет масштаб только картинки. Оверлеи масштабируются вместе с ней
 // лишь при включённом замке; без замка они остаются на месте и не меняют
-// размер. Картинка масштабируется svg.js вокруг локального центра её
-// содержимого (матрица C); оверлею нужно применить ту же трансформацию,
-// сконъюгированную матрицей картинки: G = M_img · C · M_img⁻¹.
+// размер. Картинка масштабируется вокруг точки anchor (локальные координаты;
+// при зуме колесом это точка под курсором, иначе — центр картинки).
+// Оверлею нужно применить ту же трансформацию, сконъюгированную матрицей
+// картинки: G = M_img · C · M_img⁻¹.
 // Работает при любом уже применённом перетаскивании/повороте/зуме картинки.
-const followZoom = (factor) => {
+const followZoom = (factor, anchor = null) => {
   if (factor === 1) return;
   const groups = pinnedGroups();
   if (groups.length) {
     const mimg = mainimage.matrixify();
     const b = mainimage.bbox(); // локальный бокс содержимого картинки
-    const C = new Matrix().scaleO(
-      factor,
-      factor,
-      b.x + b.width / 2,
-      b.y + b.height / 2,
-    );
+    const cx = anchor ? anchor.x : b.cx;
+    const cy = anchor ? anchor.y : b.cy;
+    const C = new Matrix().scaleO(factor, factor, cx, cy);
     const G = mimg.clone().multiplyO(C).multiplyO(mimg.clone().inverseO());
     groups.forEach((g) => {
       const M = new Matrix(G).multiplyO(g.matrixify());
@@ -1242,21 +1283,26 @@ const followZoom = (factor) => {
   refreshFrozenTransforms();
 };
 
-const zoomIn = () => {
-  mainimage.scale(1.1);
-  followZoom(1.1);
-  scales.value.zoom = scales.value.zoom * 1.1;
-  getFactor();
+// factor > 1 — приблизить, < 1 — отдалить. anchor — локальная точка картинки,
+// которая остаётся неподвижной на экране.
+const zoomBy = (factor, anchor = null) => {
+  if (factor === 1) return;
+  if (anchor) {
+    mainimage.scale(factor, factor, anchor.x, anchor.y);
+  } else {
+    mainimage.scale(factor);
+  }
+  followZoom(factor, anchor);
+  scales.value.zoom = scales.value.zoom * factor;
+  getFactor(false);
 };
-const zoomOut = () => {
-  mainimage.scale(0.9);
-  followZoom(0.9);
-  scales.value.zoom = scales.value.zoom * 0.9;
-  getFactor();
-};
+
+const zoomIn = () => zoomBy(1.1);
+const zoomOut = () => zoomBy(0.9);
 
 // Зум колесом мыши над канвасом: один шаг 10% на «щелчок» колеса.
 // Дельта накапливается, чтобы трекпад с мелкими событиями не zoom-ил слишком быстро.
+// Точка под курсором остаётся на месте — картинка смещается при масштабировании.
 let wheelDelta = 0;
 const WHEEL_STEP = 50;
 const onWheelZoom = (event) => {
@@ -1264,8 +1310,9 @@ const onWheelZoom = (event) => {
   const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 100 : 1;
   wheelDelta += event.deltaY * unit;
   if (Math.abs(wheelDelta) < WHEEL_STEP) return;
-  if (wheelDelta < 0) zoomIn();
-  else zoomOut();
+  const factor = wheelDelta < 0 ? 1.1 : 0.9;
+  const anchor = imagePointUnderCursor(event);
+  zoomBy(factor, anchor);
   wheelDelta = 0;
 };
 
@@ -1318,17 +1365,30 @@ const onFrameDragged = ({ frame, group, dx, dy }) => {
       moveGroupByScreenDelta(t.group, d.x, d.y);
     }
   });
+  // «запертая» масштабная линейка следует за изображением, которое только что
+  // сдвинулось вместе с рамкой
+  if (om.value.settings.scalebar_ready && scalebar) {
+    const resizer = scalebar.get(0);
+    if (resizer) moveGroupByScreenDelta(resizer, d.x, d.y);
+  }
   // замороженные копии привязаны к изображению, которое только что сдвинулось
   refreshFrozenTransforms();
 };
 bus.on("frame-dragged", onFrameDragged);
 const addScaleBar = () => {
   om.value.settings.scalebar_ready = false;
-  scalebar = initScalebar(scalebar, draw, scales.value);
+  scalebar = initScalebar(
+    scalebar,
+    draw,
+    scales.value,
+    onScalebarLengthEdited,
+    onScalebarEndpointsDragStart,
+    onScalebarEndpointsDragEnd,
+  );
   positionScalebarBurned(draw, scalebar);
 };
 scalebar.click(function () {
-  getFactor();
+  getFactor(false);
 });
 // Линейные поля результатов: при изменении масштаба их нужно пропорционально
 // пересчитать. Углы (alfa) и категориальные поля (side/fullness/label) не меняются.
@@ -1402,10 +1462,46 @@ const rescaleRowsForCurrentFile = (ratio) => {
   };
 };
 
+// Длину линейки можно изменить прямо на холсте. После этого пересчитываем
+// масштаб и пересчитываем уже сохранённые результаты текущего файла.
+const onScalebarLengthEdited = () => {
+  const oldFactor = Number(scales.value.factor) || 1;
+  getFactor();
+  const newFactor = Number(scales.value.factor);
+  if (
+    om.value.settings.scalebar_ready &&
+    Number.isFinite(newFactor) &&
+    newFactor > 0
+  ) {
+    rescaleRowsForCurrentFile(newFactor / oldFactor);
+  }
+  lso.updateMeasures();
+  concave_lso.updateMeasures();
+  dso.updateMeasures();
+};
+
+// Перетаскивание концов линейки — тоже изменение калибровки. Запоминаем
+// масштаб в начале, а в конце пересчитываем и обновляем сохранённые записи.
+let scalebarFactorBeforeDrag = 1;
+const onScalebarEndpointsDragStart = () => {
+  scalebarFactorBeforeDrag = Number(scales.value.factor) || 1;
+};
+const onScalebarEndpointsDragEnd = () => {
+  const oldFactor = scalebarFactorBeforeDrag || 1;
+  getFactor();
+  const newFactor = Number(scales.value.factor);
+  if (
+    om.value.settings.scalebar_ready &&
+    Number.isFinite(newFactor) &&
+    newFactor > 0
+  ) {
+    rescaleRowsForCurrentFile(newFactor / oldFactor);
+  }
+};
+
 const setScaleBar = () => {
   const oldFactor = Number(scales.value.factor) || 1;
   om.value.settings.scalebar_ready = true;
-  scales.value.zoom = 1;
   getFactor();
   const newFactor = Number(scales.value.factor);
   // уже сохранённые результаты текущего файла пересчитываем под новый масштаб
@@ -1998,8 +2094,9 @@ image {
 
 #canvas svg {
   display: block;
+  background: var(--otri-canvas-bg);
   border-style: solid;
-  border-color: gray;
+  border-color: var(--otri-canvas-border);
   border-width: thin;
 }
 
@@ -2067,7 +2164,7 @@ image {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid #e0e0e0;
+  border-left: 1px solid var(--otri-border-soft);
 }
 
 /* Селектор записи в заголовке описания */
@@ -2081,10 +2178,10 @@ image {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  border: 1px solid #ccc;
+  border: 1px solid var(--otri-border);
   border-radius: 4px;
   padding: 8px;
-  background: #fff;
+  background: var(--otri-surface);
 }
 
 /* Клик по строке таблицы выбирает запись для описания */
@@ -2095,7 +2192,7 @@ image {
 /* Подсветка выбранной записи */
 .q-table tbody tr.selected-record-row,
 .q-table tbody tr.selected-record-row>td {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--otri-selected-row);
 }
 
 /* Таблицы подстраиваются под ширину половины панели:

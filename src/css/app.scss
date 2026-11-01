@@ -1,1 +1,64 @@
 // app global css in SCSS form
+
+// Цвета интерфейса для светлой и тёмной темы.
+// Компоненты используют эти переменные, поэтому переключение темы
+// (Quasar Dark plugin добавляет body--dark / body--light) не требует
+// дублировать все стили.
+:root {
+  --otri-surface: #fff;
+  --otri-border: #ccc;
+  --otri-border-soft: #e0e0e0;
+  --otri-text-muted: #555;
+  --otri-text-subtle: #777;
+  --otri-selected-row: rgba(0, 0, 0, 0.06);
+  --otri-canvas-bg: #fff;
+  --otri-canvas-border: #9e9e9e;
+}
+
+// Нативные элементы (скроллбары, поля) следуют выбранной теме
+body.body--light {
+  color-scheme: light;
+}
+
+body.body--dark {
+  color-scheme: dark;
+
+  --otri-surface: #1e1e1e;
+  --otri-border: #444;
+  --otri-border-soft: #333;
+  --otri-text-muted: #b0b0b0;
+  --otri-text-subtle: #9e9e9e;
+  --otri-selected-row: rgba(255, 255, 255, 0.1);
+  --otri-canvas-bg: #121212;
+  --otri-canvas-border: #444;
+}
+
+// Подписи и подложки на SVG-холсте: в тёмной теме светлый текст
+// на тёмной подложке, чтобы он оставался читаемым.
+body.body--dark .svg-label {
+  fill: rgba(255, 255, 255, 0.9);
+}
+
+body.body--dark .svg-label-bg {
+  fill: #1e1e1e;
+}
+
+// Замороженные копии записей на холсте: их линии темнее фона
+// в светлой теме, поэтому в тёмной перекрашиваем их в светлый.
+body.body--dark .frozen-clone line,
+body.body--dark .frozen-clone polyline {
+  stroke: #cfcfcf;
+}
+
+body.body--dark .frozen-clone circle {
+  stroke: #cfcfcf;
+}
+
+body.body--dark .frozen-clone text {
+  fill: #cfcfcf;
+}
+
+// Внешнее кольцо лупы
+body.body--dark .magnifier-ring {
+  stroke: #e0e0e0;
+}

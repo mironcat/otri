@@ -22,6 +22,7 @@ import {
   constrainPointMovement,
   constrainVerticalPointMovement,
   addLockToggle,
+  getGroupFactor,
 } from "@/scripts/utils.js";
 import { applyScales, getLineScale } from "@/scripts/geostyle.js";
 export default function concaveLeftSideObjects(draw, om, scales, bus) {
@@ -90,13 +91,15 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
       size: 14,
       family: "Arial",
     })
-    .move(0, -17);
+    .move(0, -17)
+    .addClass("svg-label");
 
   // светлая подложка под надписью стороны — как у метки по центру рамки
   const sideLabelBg = draw
     .rect(0, 0)
     .fill("#fff")
     .addClass("side-label-bg")
+    .addClass("svg-label-bg")
     .attr({ "fill-opacity": 0.75, "pointer-events": "none" });
 
   // размеры подложки пересчитываются по локальному bbox текста
@@ -588,6 +591,7 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
     visible ? mobjects.show() : mobjects.hide();
   }
   function updateMeasures() {
+    const factor = getGroupFactor(draw, scales, mobjects);
     lockIcon.position();
     updateAdditionalObjects();
     sideLabel.attr({
@@ -596,8 +600,8 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
     });
     layoutSideLabelBg();
 
-    om.value.length = baseFrame.attr("width") * scales.value.factor;
-    om.value.height = baseFrame.attr("height") * scales.value.factor;
+    om.value.length = baseFrame.attr("width") * factor;
+    om.value.height = baseFrame.attr("height") * factor;
     const bFA = baseFrame.attr(["x", "y", "width", "height"]);
     const cp = {
       //coordinates of baseFrame corner points
@@ -645,15 +649,15 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
       ) + 360;
 
     // hc
-    om.value.ad.hc = (dPMC.attr("cx") - cp.ad.x) * scales.value.factor;
-    om.value.av.hc = (avPMC.attr("cx") - cp.av.x) * scales.value.factor;
-    om.value.pd.hc = (cp.pd.x - dPMC.attr("cx")) * scales.value.factor;
-    om.value.pv.hc = (cp.pv.x - pvPMC.attr("cx")) * scales.value.factor;
+    om.value.ad.hc = (dPMC.attr("cx") - cp.ad.x) * factor;
+    om.value.av.hc = (avPMC.attr("cx") - cp.av.x) * factor;
+    om.value.pd.hc = (cp.pd.x - dPMC.attr("cx")) * factor;
+    om.value.pv.hc = (cp.pv.x - pvPMC.attr("cx")) * factor;
     // vc
-    om.value.ad.vc = (aPMC.attr("cy") - cp.ad.y) * scales.value.factor;
-    om.value.av.vc = (cp.av.y - aPMC.attr("cy")) * scales.value.factor;
-    om.value.pd.vc = (pPMC.attr("cy") - cp.pd.y) * scales.value.factor;
-    om.value.pv.vc = (cp.pv.y - pPMC.attr("cy")) * scales.value.factor;
+    om.value.ad.vc = (aPMC.attr("cy") - cp.ad.y) * factor;
+    om.value.av.vc = (cp.av.y - aPMC.attr("cy")) * factor;
+    om.value.pd.vc = (pPMC.attr("cy") - cp.pd.y) * factor;
+    om.value.pv.vc = (cp.pv.y - pPMC.attr("cy")) * factor;
     // ln
     om.value.ad.ln =
       getLengthByCoordinates({
@@ -661,28 +665,28 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
         y1: cp.ad.y,
         x2: adCrossPoint.attr("cx"),
         y2: adCrossPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.pd.ln =
       getLengthByCoordinates({
         x1: cp.pd.x,
         y1: cp.pd.y,
         x2: pdCrossPoint.attr("cx"),
         y2: pdCrossPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.av.ln =
       getLengthByCoordinates({
         x1: cp.av.x,
         y1: cp.av.y,
         x2: avCrossPoint.attr("cx"),
         y2: avCrossPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.pv.ln =
       getLengthByCoordinates({
         x1: cp.pv.x,
         y1: cp.pv.y,
         x2: pvCrossPoint.attr("cx"),
         y2: pvCrossPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     // sln
     om.value.ad.sln =
       getLengthByCoordinates({
@@ -690,28 +694,28 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
         y1: cp.ad.y,
         x2: adTangentPoint.attr("cx"),
         y2: adTangentPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.pd.sln =
       getLengthByCoordinates({
         x1: cp.pd.x,
         y1: cp.pd.y,
         x2: pdTangentPoint.attr("cx"),
         y2: pdTangentPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.av.sln =
       getLengthByCoordinates({
         x1: cp.av.x,
         y1: cp.av.y,
         x2: avTangentPoint.attr("cx"),
         y2: avTangentPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.pv.sln =
       getLengthByCoordinates({
         x1: cp.pv.x,
         y1: cp.pv.y,
         x2: pvTangentPoint.attr("cx"),
         y2: pvTangentPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     // lv
     om.value.v.lv =
       getLengthByCoordinates({
@@ -719,21 +723,21 @@ export default function concaveLeftSideObjects(draw, om, scales, bus) {
         y1: avPMC.attr("cy"),
         x2: pvPMC.attr("cx"),
         y2: pvPMC.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.v.lvl =
       getLengthByCoordinates({
         x1: avPMC.attr("cx"),
         y1: avPMC.attr("cy"),
         x2: vTangentPoint.attr("cx"),
         y2: avPMC.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     om.value.v.dv =
       getLengthByCoordinates({
         x1: vTangentPoint.attr("cx"),
         y1: avPMC.attr("cy"),
         x2: vTangentPoint.attr("cx"),
         y2: vTangentPoint.attr("cy"),
-      }) * scales.value.factor;
+      }) * factor;
     if (vTangentPoint.attr("cy") > avPMC.attr("cy"))
       om.value.v.dv = om.value.v.dv * -1;
     const apL = getAnglePointLineCoordinates();

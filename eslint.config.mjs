@@ -60,10 +60,20 @@ export default [
       ],
 
       // false positives on <script setup> refs that are only read in templates
+      // (для .vue правило отключается отдельным блоком ниже)
       'no-useless-assignment': 'warn',
 
       // allow debugger during development only
       'no-debugger': process.env.NODE_ENV === 'production' ? 'error' : 'off'
+    }
+  },
+
+  {
+    // Базовое правило ESLint не видит использования ref/computed/функций
+    // в <template>, поэтому в .vue оно даёт ложные срабатывания.
+    files: ['**/*.vue'],
+    rules: {
+      'no-useless-assignment': 'off'
     }
   },
 

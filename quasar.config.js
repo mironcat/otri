@@ -18,7 +18,7 @@ export default defineConfig(function (/* ctx */) {
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
-    boot: ["svgjs"],
+    boot: ["svgjs", "theme"],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-js#css
     css: ["app.scss"],
@@ -86,7 +86,7 @@ export default defineConfig(function (/* ctx */) {
       // directives: [],
 
       // Quasar plugins
-      plugins: ["Notify"],
+      plugins: ["Notify", "Dark"],
     },
 
     // animations: 'all', // --- includes all animations

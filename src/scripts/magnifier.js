@@ -1,7 +1,8 @@
 // Лупа: круглое окно с увеличенным участком изображения, помогает ставить
 // точки точно. Окно появляется при нажатии и удержании левой кнопки мыши
-// на активной векторной точке (кружке: оранжевом/«жёлтом», зелёном, красном),
-// следует за точкой во время перетаскивания и скрывается при отпускании.
+// на активной векторной точке (кружке: оранжевом/«жёлтом», зелёном, красном)
+// или на прямоугольнике-маркере на конце масштабной линейки, следует за
+// точкой во время перетаскивания и скрывается при отпускании.
 // Синий/полупрозрачный прямоугольник (baseFrame) лупу не активирует.
 // Лупа рисуется под всеми векторными элементами (выше только изображение),
 // клики проходят сквозь неё. Кнопка в шапке и клавиша Z включают/выключают
@@ -105,6 +106,7 @@ export function initMagnifier(draw) {
     .circle(LENS_RADIUS * 2)
     .move(-LENS_RADIUS, -LENS_RADIUS)
     .fill("none")
+    .addClass("magnifier-ring")
     .stroke({ color: "#333", width: 1.5 });
   content
     .line(-8, 0, 8, 0)
@@ -130,14 +132,26 @@ export function initMagnifier(draw) {
     }
   };
 
+  // Кружки — обычные точки. Прямоугольники лупу включают только внутри
+  // группы масштабной линейки: её маркеры на концах тоже нужно ставить точно.
+  const isMagnifiable = (t) => {
+    if (!t) return false;
+    if (t.closest && t.closest("#magnifier")) return false;
+    const tag = String(t.tagName).toLowerCase();
+    if (tag === "circle") return true;
+    if (tag === "rect") {
+      return Boolean(t.closest && t.closest("#scalebar-resizer"));
+    }
+    return false;
+  };
+
   const onPointerDown = (e) => {
     if (!visibility.magnifier || e.button !== 0) return;
     const t = e.target;
-    // активируем только векторные точки-кружки,
-    // но не элементы самой лупы и не прямоугольники
-    if (!t || String(t.tagName).toLowerCase() !== "circle") return;
-    if (t.closest && t.closest("#magnifier")) return;
-    let el = null;
+    // активируем только векторные точки-кружки и прямоугольники на концах
+    // масштабной линейки, но не элементы самой лупы и не baseFrame
+    if (!isMagnifiable(t)) return;
+    let el;
     try {
       el = adopt(t);
     } catch (err) {
