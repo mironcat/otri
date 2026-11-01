@@ -32,6 +32,9 @@ yarn-error.log*
 # local .env files
 .env.local*
 
+# release notes collected locally from GitHub
+/RELEASE_NOTES.md
+
 # package manager lock files (project uses pnpm, lock is not committed)
 pnpm-lock.yaml
 package-lock.json
