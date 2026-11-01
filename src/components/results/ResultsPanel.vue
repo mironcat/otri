@@ -1,38 +1,69 @@
 <template>
   <div class="tables-panel q-mx-md q-mb-md">
-    <div class="tables-split">
-      <ResultsTable :rows="combinedRows" :selected-record-no="selectedNo" :show-description="descriptionVisible"
-        @row-click="onRowClick" @edit-record="emit('edit-record', $event)"
-        @delete-record="emit('delete-record', $event)" @update:show-description="descriptionVisible = $event" />
-      <DescriptionPanel :visible="descriptionVisible" :options="recordOptions" :selected-record-no="selectedNo"
-        :measurements="selectedMeasurements" @update:selected-record-no="selectedNo = $event" />
+    <div class="tables-split" :class="{ 'tables-split--editor': descriptionEditor && descriptionVisible }">
+      <ResultsTable :rows="combinedRows" :selected-record-nos="selectedNos" :active-record-no="activeRecordNo"
+        :show-description="descriptionVisible" @update:selected-record-nos="selectedNos = $event"
+        @create-description="createDescription" @focus-record="emit('focus-record', $event)"
+        @edit-record="emit('edit-record', $event)" @delete-record="emit('delete-record', $event)"
+        @update:show-description="descriptionVisible = $event" />
+      <DescriptionPanel :visible="descriptionVisible" :descriptions="descriptionsModel"
+        :selected-description-id="selectedDescriptionIdModel" :description="selectedDescription"
+        :editor-mode="descriptionEditor" :graphs-visible="graphsVisible" :graphs-available="graphsAvailable"
+        @update:selected-description-id="selectedDescriptionIdModel = $event"
+        @toggle-description-editor="descriptionEditor = !descriptionEditor"
+        @toggle-graphs="emit('toggle-graphs')" @delete-description="deleteDescription" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, watch } from "vue";
-import { combineRecordMeasurements } from "@/scripts/interpretation.js";
+import { computed, ref, watch } from "vue";
+import { useQuasar } from "quasar";
 import { mergeRowsByRecordNo } from "@/scripts/resultsTable.js";
+import { buildAveragedDescription } from "@/scripts/resultsDescription.js";
 import ResultsTable from "@/components/results/ResultsTable.vue";
 import DescriptionPanel from "@/components/results/DescriptionPanel.vue";
 
+const $q = useQuasar();
+
 const props = defineProps({
   rows: { type: Object, required: true },
-  selectedRecordNo: { type: Number, default: null },
+  selectedRecordNos: { type: Array, default: () => [] },
+  activeRecordNo: { type: Number, default: null },
+  canvasHidden: { type: Boolean, default: false },
+  graphsVisible: { type: Boolean, default: false },
+  descriptions: { type: Array, default: () => [] },
+  selectedDescriptionId: { type: String, default: null },
   showDescription: { type: Boolean, default: true },
 });
 
 const emit = defineEmits([
-  "update:selectedRecordNo",
+  "update:selectedRecordNos",
+  "update:descriptions",
+  "update:selectedDescriptionId",
   "update:showDescription",
+  "toggle-graphs",
+  "focus-record",
   "edit-record",
   "delete-record",
 ]);
 
-const selectedNo = computed({
-  get: () => props.selectedRecordNo,
-  set: (value) => emit("update:selectedRecordNo", value),
+const selectedNos = computed({
+  get: () => props.selectedRecordNos,
+  set: (value) => emit("update:selectedRecordNos", value || []),
+});
+
+// Графики имеют смысл при наличии более одной записи в наборе для описания
+const graphsAvailable = computed(() => selectedNos.value.length > 1);
+
+const descriptionsModel = computed({
+  get: () => props.descriptions,
+  set: (value) => emit("update:descriptions", value),
+});
+
+const selectedDescriptionIdModel = computed({
+  get: () => props.selectedDescriptionId,
+  set: (value) => emit("update:selectedDescriptionId", value),
 });
 
 const descriptionVisible = computed({
@@ -40,79 +71,88 @@ const descriptionVisible = computed({
   set: (value) => emit("update:showDescription", value),
 });
 
+// Режим редактора описания: таблица — 1/3, описание — 2/3
+const descriptionEditor = ref(false);
+
 // Единая таблица: латеральная и дорсальная части одной записи
 const combinedRows = computed(() => mergeRowsByRecordNo(props.rows));
 
-// Список записей: латеральная и дорсальная строки объединяются по record_no
-const recordOptions = computed(() => {
-  const records = new Map();
-  props.rows.lateral.forEach((row) => {
-    records.set(row.record_no, {
-      record_no: row.record_no,
-      label: row.label,
-      filename: row.filename,
-      sides: ["Л"],
-    });
-  });
-  props.rows.dorsal.forEach((row) => {
-    const record = records.get(row.record_no);
-    if (record) {
-      record.sides.push("Д");
-    } else {
-      records.set(row.record_no, {
-        record_no: row.record_no,
-        label: row.label,
-        filename: row.filename,
-        sides: ["Д"],
-      });
-    }
-  });
-  return [...records.values()]
-    .sort((a, b) => a.record_no - b.record_no)
-    .map((record) => ({
-      ...record,
-      recordLabel: `№ ${record.record_no} — ${record.label || "без метки"} (${record.sides.join("+")})`,
-    }));
-});
+// Выбранное пользователем описание (созданное по средним значениям)
+const selectedDescription = computed(
+  () =>
+    props.descriptions.find(
+      (description) => description.id === props.selectedDescriptionId,
+    ) || null,
+);
 
-// Если выбранной записи больше нет (например, её удалили),
-// выбираем последнюю сохранённую
-watch(recordOptions, (options) => {
-  if (!options.length) {
-    selectedNo.value = null;
-    return;
-  }
-  if (!options.some((option) => option.record_no === selectedNo.value)) {
-    selectedNo.value = options[options.length - 1].record_no;
+// Удалённые записи не должны оставаться в выборе для нового описания
+watch(combinedRows, (rows) => {
+  const valid = new Set(rows.map((row) => row.record_no));
+  const next = props.selectedRecordNos.filter((recordNo) =>
+    valid.has(recordNo),
+  );
+  if (next.length !== props.selectedRecordNos.length) {
+    selectedNos.value = next;
   }
 });
 
-// Строки таблиц для выбранной записи
-const selectedRecord = computed(() => {
-  const recordNo = selectedNo.value;
-  if (recordNo === null || recordNo === undefined) return null;
-  return {
-    lateral:
-      props.rows.lateral.find((row) => row.record_no === recordNo) || null,
-    dorsal:
-      props.rows.dorsal.find((row) => row.record_no === recordNo) || null,
+const recordsWord = (count) => {
+  const lastTwo = count % 100;
+  const last = count % 10;
+  if (lastTwo >= 11 && lastTwo <= 14) return "записей";
+  if (last === 1) return "запись";
+  if (last >= 2 && last <= 4) return "записи";
+  return "записей";
+};
+
+// Создать описание по средним значениям выбранных записей
+const createDescription = () => {
+  const records = combinedRows.value.filter((row) =>
+    props.selectedRecordNos.includes(row.record_no),
+  );
+  if (!records.length) return;
+
+  const measurements = buildAveragedDescription(records);
+  if (!measurements) return;
+
+  const number = props.descriptions.length + 1;
+  const count = records.length;
+  const description = {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    name: `Среднее №${number} — ${count} ${recordsWord(count)}`,
+    recordNos: records.map((row) => row.record_no),
+    measurements,
+    createdAt: new Date().toISOString(),
   };
-});
 
-// Измерения выбранной записи для компонента описания
-const selectedMeasurements = computed(() => {
-  const record = selectedRecord.value;
-  if (!record) return null;
-  return combineRecordMeasurements(record.lateral, record.dorsal);
-});
-
-// Клик по строке таблицы выбирает запись и показывает её описание.
-// Редактирование записи запускается только иконкой «карандаш» на рамке,
-// а не выбором строки: иначе случайный клик переключал бы активную геометрию.
-const onRowClick = (row) => {
-  if (row?.record_no === undefined || row?.record_no === null) return;
-  selectedNo.value = row.record_no;
+  descriptionsModel.value = [...props.descriptions, description];
+  selectedDescriptionIdModel.value = description.id;
   descriptionVisible.value = true;
+};
+
+// Удалить выбранное описание, выбрав соседнее оставшееся
+const deleteDescription = () => {
+  const description = selectedDescription.value;
+  if (!description) return;
+
+  $q.dialog({
+    title: "Удаление описания",
+    message: `Удалить «${description.name}»?`,
+    cancel: { label: "Отмена", flat: true, color: "grey" },
+    ok: { label: "Удалить", color: "negative", unelevated: true },
+    persistent: true,
+    focus: "cancel",
+  }).onOk(() => {
+    const index = props.descriptions.findIndex(
+      (item) => item.id === description.id,
+    );
+    const next = props.descriptions.filter(
+      (item) => item.id !== description.id,
+    );
+    descriptionsModel.value = next;
+    selectedDescriptionIdModel.value =
+      next[Math.min(index, next.length - 1)]?.id ?? null;
+  });
 };
 </script>
 
@@ -129,11 +169,28 @@ const onRowClick = (row) => {
   flex-direction: column;
 }
 
+/* Когда холст скрыт, панель результатов занимает освободившееся место */
+.tables-panel--expanded {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
 /* Две равные половины по горизонтали */
 .tables-split {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
+}
+
+/* Режим редактора описания: таблица — треть, описание — две трети */
+.tables-split--editor .tables-half {
+  flex: 0 0 33.333%;
+  max-width: 33.333%;
+}
+
+.tables-split--editor .description-half {
+  flex: 0 0 66.667%;
+  max-width: 66.667%;
 }
 
 .tables-half {
@@ -168,12 +225,7 @@ const onRowClick = (row) => {
   background: var(--otri-surface);
 }
 
-/* Клик по строке таблицы выбирает запись для описания */
-.tables-half .q-table tbody tr {
-  cursor: pointer;
-}
-
-/* Подсветка выбранной записи */
+/* Подсветка записей, выбранных для создания описания */
 .q-table tbody tr.selected-record-row,
 .q-table tbody tr.selected-record-row>td {
   background: var(--otri-selected-row);
@@ -193,6 +245,16 @@ const onRowClick = (row) => {
 .tables-half table.q-table {
   table-layout: fixed;
   width: 100%;
+}
+
+/* Колонка выбора: при table-layout: fixed нужна явная ширина,
+   иначе чекбокс выходит за границы ячейки и соседняя ячейка
+   перехватывает клики по его правой половине */
+.tables-half table.q-table .q-table--col-auto-width {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  text-align: center;
 }
 
 /* Верхняя панель таблицы (заголовок и кнопка экспорта)

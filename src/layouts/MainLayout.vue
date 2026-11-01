@@ -62,9 +62,13 @@
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="leftDrawerOpen" :mini="false" behavior="desktop" bordered>
-      <MeasureResults />
-      <InterpretationResults />
+    <q-drawer v-model="leftDrawerOpen" :mini="false" :width="drawerWidth" behavior="desktop" bordered>
+      <div class="drawer-inner">
+        <MeasureResults />
+        <InterpretationResults />
+        <div class="drawer-resize-handle" title="Изменить ширину панели"
+          @pointerdown="startDrawerResize" @dblclick="resetDrawerWidth"></div>
+      </div>
     </q-drawer>
 
     <q-page-container>
@@ -108,6 +112,83 @@ const leftDrawerOpen = ref(true);
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;
 }
+
+// --- Ширина левой панели: изменение мышью -------------------------------
+const DRAWER_DEFAULT_WIDTH = 300;
+const DRAWER_MIN_WIDTH = 220;
+const DRAWER_MAX_WIDTH = 600;
+const DRAWER_WIDTH_KEY = "otri.leftDrawerWidth";
+
+const clampDrawerWidth = (value) => {
+  const max = Math.max(
+    DRAWER_MIN_WIDTH,
+    Math.min(DRAWER_MAX_WIDTH, window.innerWidth * 0.5),
+  );
+  const number = Number(value);
+  return Math.min(
+    max,
+    Math.max(DRAWER_MIN_WIDTH, Number.isFinite(number) ? number : DRAWER_DEFAULT_WIDTH),
+  );
+};
+
+const readDrawerWidth = () => {
+  try {
+    const saved = Number(localStorage.getItem(DRAWER_WIDTH_KEY));
+    return Number.isFinite(saved) && saved > 0
+      ? clampDrawerWidth(saved)
+      : DRAWER_DEFAULT_WIDTH;
+  } catch {
+    return DRAWER_DEFAULT_WIDTH;
+  }
+};
+
+const drawerWidth = ref(readDrawerWidth());
+
+const persistDrawerWidth = () => {
+  try {
+    localStorage.setItem(DRAWER_WIDTH_KEY, String(drawerWidth.value));
+  } catch {
+    // localStorage может быть недоступен — ширина просто не сохранится
+  }
+};
+
+let drawerResizeState = null;
+
+const onDrawerResize = (event) => {
+  if (!drawerResizeState) return;
+  drawerWidth.value = clampDrawerWidth(
+    drawerResizeState.width + event.clientX - drawerResizeState.x,
+  );
+};
+
+const stopDrawerResize = () => {
+  if (!drawerResizeState) return;
+  drawerResizeState = null;
+  document.body.style.cursor = "";
+  document.body.style.userSelect = "";
+  window.removeEventListener("pointermove", onDrawerResize);
+  window.removeEventListener("pointerup", stopDrawerResize);
+  window.removeEventListener("pointercancel", stopDrawerResize);
+  persistDrawerWidth();
+};
+
+const startDrawerResize = (event) => {
+  if (event.button !== undefined && event.button !== 0) return;
+  event.preventDefault();
+  drawerResizeState = { x: event.clientX, width: drawerWidth.value };
+  document.body.style.cursor = "col-resize";
+  document.body.style.userSelect = "none";
+  window.addEventListener("pointermove", onDrawerResize);
+  window.addEventListener("pointerup", stopDrawerResize);
+  window.addEventListener("pointercancel", stopDrawerResize);
+};
+
+const resetDrawerWidth = () => {
+  drawerWidth.value = DRAWER_DEFAULT_WIDTH;
+  persistDrawerWidth();
+};
+
+onBeforeUnmount(stopDrawerResize);
 
 const guidesVisible = ref(getGuidesVisibility());
 function toggleGuide(key) {
@@ -158,3 +239,38 @@ function onLineScale(value) {
   bus.emit("geo-style-changed", { prevPoint: pointScale.value, prevLine: prev });
 }
 </script>
+
+<style scoped>
+.drawer-inner {
+  position: relative;
+  height: 100%;
+}
+
+.drawer-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.drawer-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 2px;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.drawer-resize-handle:hover::after,
+.drawer-resize-handle:active::after {
+  background: var(--q-primary);
+  opacity: 0.45;
+}
+</style>

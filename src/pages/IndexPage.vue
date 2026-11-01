@@ -1,6 +1,6 @@
 <template>
   <q-page class="column canvas-page">
-    <div class="row q-ml-md q-mt-md">
+    <div class="row q-mx-md q-mt-md items-center">
       <div class="q-gutter-sm">
         <q-btn color="secondary" @click="zoomIn" icon="zoom_in" />
         <q-btn color="secondary" @click="zoomOut" icon="zoom_out" />
@@ -35,13 +35,24 @@
           @click="om.half ? (om.fullness = 'half') : (om.fullness = 'full')" label="Половина"
           :color="$q.dark.isActive ? 'grey-4' : 'black'" />
       </div>
-    </div>
-    <div class="row q-ma-md canvas-row">
-      <div id="canvas" ref="canvasRef"></div>
-      <q-btn class="canvas-fab" round unelevated color="primary" icon="add_box" :disable="!activeFrameHidden"
-        title="Создать рамку" aria-label="Создать рамку" @click="createActiveFrame">
-        <q-tooltip>Новый фрейм</q-tooltip>
+      <q-space />
+      <q-btn flat color="secondary" :icon="canvasHidden ? 'visibility' : 'visibility_off'" @click="toggleCanvas">
+        <q-tooltip>{{ canvasHidden ? 'Показать холст' : 'Скрыть холст' }}</q-tooltip>
       </q-btn>
+    </div>
+    <div v-show="!canvasHidden || showGraphs" class="canvas-workspace row no-wrap">
+      <div v-if="showGraphs" class="graphs-panel q-ma-md" :class="{ 'graphs-panel--full': canvasHidden }">
+        <ResultsGraphs :rows="rows" :selected-record-nos="selectedRecordNos"
+          :focused-record-no="focusedRecordNo" @focus-record="focusedRecordNo = $event"
+          @open-window="showGraphsWindow = true" />
+      </div>
+      <div v-show="!canvasHidden" class="col q-ma-md canvas-row">
+        <div id="canvas" ref="canvasRef"></div>
+        <q-btn class="canvas-fab" round unelevated color="primary" icon="add_box" :disable="!activeFrameHidden"
+          title="Создать рамку" aria-label="Создать рамку" @click="createActiveFrame">
+          <q-tooltip>Новый фрейм</q-tooltip>
+        </q-btn>
+      </div>
     </div>
     <div class="row q-ma-md q-gutter-sm flex items-center">
       <q-file bg-color="secondary" dense v-model="imagefile" label="Выберите файл" filled style="max-width: 400px"
@@ -67,9 +78,20 @@
       </q-btn>
       <!-- <q-chip>{{ scales.factor }}</q-chip> -->
     </div>
-    <ResultsPanel v-show="showTables" :rows="rows" v-model:selected-record-no="selectedRecordNo"
-      v-model:show-description="showDescription" @edit-record="activateRecord"
-      @delete-record="confirmDeleteRecord" />
+    <ResultsPanel v-show="showTables" :class="{ 'tables-panel--expanded': canvasHidden }" :rows="rows"
+      :active-record-no="activeRecordNo" :canvas-hidden="canvasHidden" :graphs-visible="showGraphs"
+      v-model:selected-record-nos="selectedRecordNos" v-model:descriptions="generatedDescriptions"
+      v-model:selected-description-id="selectedDescriptionId" v-model:show-description="showDescription"
+      @toggle-graphs="toggleGraphs" @focus-record="focusedRecordNo = $event"
+      @edit-record="activateRecord" @delete-record="confirmDeleteRecord" />
+    <q-dialog v-model="showGraphsWindow" transition-show="scale" transition-hide="scale">
+      <div ref="graphWindowRef" class="graph-window">
+        <ResultsGraphs fill window-mode :rows="rows" :selected-record-nos="selectedRecordNos"
+          :focused-record-no="focusedRecordNo" @focus-record="focusedRecordNo = $event"
+          @close-window="showGraphsWindow = false" />
+        <div class="graph-window__resize-handle" @pointerdown="startGraphResize"></div>
+      </div>
+    </q-dialog>
   </q-page>
 </template>
 <script setup>
@@ -86,7 +108,7 @@ const showTables = ref(false);
 // Видимость текстового описания (правая половина нижней панели)
 const showDescription = ref(true);
 
-import { watch, inject, nextTick } from "vue";
+import { watch, inject, nextTick, defineAsyncComponent } from "vue";
 import "@svgdotjs/svg.draggable.js";
 import { Matrix, Point } from "@svgdotjs/svg.js";
 import { onMounted, onBeforeUnmount, ref } from "vue";
@@ -104,8 +126,12 @@ import { initGuides, resizeGuides } from "@/scripts/guides.js";
 import { initMagnifier } from "@/scripts/magnifier.js";
 import { exportCombinedTable as exportResultsCsv } from "@/scripts/resultsCsv.js";
 import ResultsPanel from "@/components/results/ResultsPanel.vue";
+const ResultsGraphs = defineAsyncComponent(
+  () => import("@/components/results/ResultsGraphs.vue"),
+);
 
 const canvasRef = ref();
+const graphWindowRef = ref(null);
 // let imagepath = ref('/src/assets/ost1.jpg')
 const imagefile = ref(null);
 // let draggableMainImage = ref(true)
@@ -145,10 +171,21 @@ const om = ref({
     pinToImage: { left: false, dorsal: false },
   },
 });
-// Запись, выбранная для текстового описания
-const selectedRecordNo = ref(null);
+// Записи, выбранные для создания описания по средним значениям
+const selectedRecordNos = ref([]);
+// Запись, выбранная кликом по строке таблицы (для подсветки на графике)
+const focusedRecordNo = ref(null);
+// Созданные описания по нескольким записям и выбранное описание
+const generatedDescriptions = ref([]);
+const selectedDescriptionId = ref(null);
 // Активная рамка скрыта после сохранения записи — кнопка «Создать рамку» доступна
 const activeFrameHidden = ref(false);
+// Холст можно скрыть, чтобы освободить место для таблицы и описания
+const canvasHidden = ref(false);
+// Панель графиков слева от холста
+const showGraphs = ref(false);
+// Отдельное окно с графиками
+const showGraphsWindow = ref(false);
 
 // Поиск индекса строки в массиве rows по номеру записи
 const findRowIdx = (arr, recordNo) => {
@@ -213,7 +250,7 @@ let concave_lso = concaveLeftSideObjects(draw, om, scales, bus);
 // становится цветной и доступной для редактирования.
 const recordFrames = new Map(); // record_no -> { left, concave, dorsal, ui }
 const frozenGroups = new Map(); // record_no -> { left, concave, dorsal }
-let activeRecordNo = null;
+const activeRecordNo = ref(null);
 // подавление синхронизации Left/Concave при программном восстановлении записи
 let skipConcaveSync = false;
 
@@ -287,7 +324,7 @@ const onFrameShown = (visible) => {
   if (!visible) return;
   activeFrameHidden.value = false;
   // для новой рамки показываем номер следующей записи
-  if (activeRecordNo == null) setFrameRecordId(om.value.record_no + 1);
+  if (activeRecordNo.value == null) setFrameRecordId(om.value.record_no + 1);
 };
 bus.on("lateral-show", onFrameShown);
 bus.on("concave-vs", onFrameShown);
@@ -561,18 +598,33 @@ const setFrozenVisibility = (recordNo, opacity) => {
   });
 };
 
+// Отменить редактирование активной записи: вернуть её замороженную копию
+// и снова скрыть активные рамки.
+const cancelRecordEditing = () => {
+  const recordNo = activeRecordNo.value;
+  if (recordNo == null) return;
+  setFrozenVisibility(recordNo, "0.75");
+  activeRecordNo.value = null;
+  bus.emit("record-edit-state", { editing: false });
+  hideActiveFrame();
+};
+
 // Сделать запись активной: прячем её замороженную копию (зелёная рамка не мешает),
 // а предыдущую активную запись (если была) — показываем снова.
+// Повторный вызов для уже активной записи отменяет редактирование.
 const activateRecord = (recordNo) => {
+  if (activeRecordNo.value === recordNo) {
+    cancelRecordEditing();
+    return;
+  }
   const rec = recordFrames.get(recordNo);
   if (!rec) return;
-  if (activeRecordNo === recordNo) return;
   // показать frozenClone предыдущей активной записи
-  if (activeRecordNo != null) {
-    setFrozenVisibility(activeRecordNo, "0.75");
+  if (activeRecordNo.value != null) {
+    setFrozenVisibility(activeRecordNo.value, "0.75");
   }
   applyRecord(rec);
-  activeRecordNo = recordNo;
+  activeRecordNo.value = recordNo;
   // активная рамка показана — кнопка «Создать рамку» недоступна
   activeFrameHidden.value = false;
   // рядом с меткой показываем ID редактируемой записи
@@ -655,6 +707,83 @@ function sizeCanvasToContainer() {
   resizeGuides(width, height);
   positionScalebarBurned(draw, scalebar);
 }
+
+// Скрыть/показать холст. После возврата пересчитываем размер SVG:
+// при display:none контейнер имеет нулевые размеры.
+const toggleCanvas = () => {
+  canvasHidden.value = !canvasHidden.value;
+  if (!canvasHidden.value) {
+    nextTick(() => requestAnimationFrame(sizeCanvasToContainer));
+  }
+};
+
+// Панель графиков можно открывать независимо от видимости холста
+const toggleGraphs = () => {
+  showGraphs.value = !showGraphs.value;
+};
+
+// Ручное изменение размеров окна графиков (CSS resize в q-dialog
+// растягивал только высоту, поэтому используем pointer-события).
+let graphResizeState = null;
+
+const onGraphResize = (event) => {
+  const el = graphWindowRef.value;
+  if (!graphResizeState || !el) return;
+  const width = Math.min(
+    window.innerWidth * 0.95,
+    Math.max(420, graphResizeState.width + event.clientX - graphResizeState.x),
+  );
+  const height = Math.min(
+    window.innerHeight * 0.9,
+    Math.max(320, graphResizeState.height + event.clientY - graphResizeState.y),
+  );
+  el.style.width = `${width}px`;
+  el.style.height = `${height}px`;
+};
+
+const stopGraphResize = () => {
+  graphResizeState = null;
+  document.body.style.userSelect = "";
+  window.removeEventListener("pointermove", onGraphResize);
+  window.removeEventListener("pointerup", stopGraphResize);
+};
+
+const startGraphResize = (event) => {
+  const el = graphWindowRef.value;
+  if (!el) return;
+  event.preventDefault();
+  const rect = el.getBoundingClientRect();
+  graphResizeState = {
+    x: event.clientX,
+    y: event.clientY,
+    width: rect.width,
+    height: rect.height,
+  };
+  document.body.style.userSelect = "none";
+  window.addEventListener("pointermove", onGraphResize);
+  window.addEventListener("pointerup", stopGraphResize);
+};
+
+onBeforeUnmount(stopGraphResize);
+
+// Если в наборе для описания осталась одна запись, графики закрываем
+watch(
+  () => selectedRecordNos.value.length,
+  (count) => {
+    if (count <= 1) {
+      showGraphs.value = false;
+      showGraphsWindow.value = false;
+    }
+  },
+);
+
+// Если результаты скрыты, кнопка управления графиками тоже недоступна
+watch(showTables, (visible) => {
+  if (!visible) {
+    showGraphs.value = false;
+    showGraphsWindow.value = false;
+  }
+});
 
 // Привести размеры точек/линий всех наборов к текущим множителям
 // и текущему масштабу групп (чтобы при зуме с замком они не росли).
@@ -777,7 +906,7 @@ const updateRecord = (recordNo) => {
     bus.emit("pin-image-toggled", { frame: "dorsal", value: false });
   }
 
-  activeRecordNo = null;
+  activeRecordNo.value = null;
 
   // Сдвигаем активные наборы, чтобы замороженная копия была видна под ними
   overlayEntries().forEach(([key, obj]) => {
@@ -806,7 +935,7 @@ const updateRecord = (recordNo) => {
     if (idx >= 0) rows.value.dorsal[idx] = Object.assign({}, basedata, dorsaldata);
   }
 
-  selectedRecordNo.value = recordNo;
+  selectedRecordNos.value = [recordNo];
   bus.emit("record-edit-state", { editing: false });
   // после сохранения активная рамка исчезает; новая — по кнопке «Создать рамку»
   hideActiveFrame();
@@ -846,7 +975,7 @@ const addRecord = () => {
 
   // Текущий набор остаётся замороженной копией, следующий номер — для новой записи
   freezeRecord(savedRecordNo);
-  activeRecordNo = null;
+  activeRecordNo.value = null;
 
   // Сдвигаем активные наборы, чтобы замороженная копия была видна под ними.
   // Двигаем трансформацию группы (а не дочерние элементы): тогда при
@@ -880,8 +1009,8 @@ const addRecord = () => {
     rows.value.dorsal.push(Object.assign({}, basedata, dorsaldata));
   }
 
-  // Сразу показываем описание только что сохранённой записи
-  selectedRecordNo.value = savedRecordNo;
+  // Выделяем только что сохранённую запись в таблице
+  selectedRecordNos.value = [savedRecordNo];
   bus.emit("record-edit-state", { editing: false });
   // Новая рамка сразу не появляется — её можно создать кнопкой на панели
   hideActiveFrame();
@@ -889,8 +1018,8 @@ const addRecord = () => {
 
 // Кнопка «+» или «save» на рамке — создаёт новую запись или обновляет активную
 const handleRecordAction = () => {
-  if (activeRecordNo != null) {
-    updateRecord(activeRecordNo);
+  if (activeRecordNo.value != null) {
+    updateRecord(activeRecordNo.value);
   } else {
     addRecord();
   }
@@ -922,8 +1051,8 @@ const deleteRecord = (row) => {
   // удаляем сохранённую геометрию и замороженную копию записи
   removeFrozenRecord(row.record_no);
   recordFrames.delete(row.record_no);
-  if (activeRecordNo === row.record_no) {
-    activeRecordNo = null;
+  if (activeRecordNo.value === row.record_no) {
+    activeRecordNo.value = null;
     bus.emit("record-edit-state", { editing: false });
   }
 };
@@ -1371,7 +1500,8 @@ const setupScene = (imageUrl, filename) => {
   // старые записи относились к прежнему изображению
   recordFrames.clear();
   frozenGroups.clear();
-  activeRecordNo = null;
+  activeRecordNo.value = null;
+  focusedRecordNo.value = null;
   bus.emit("record-edit-state", { editing: false });
   mainimage = draw.group().attr({ id: "maig" }).draggable();
   const img = draw.image(imageUrl).attr("id", "mainimage").size(400, 400);
@@ -1463,8 +1593,10 @@ const buildProjectData = () => {
       recordId: om.value.current_record_id,
       sets,
     },
-    activeRecordNo,
-    selectedRecordNo: selectedRecordNo.value,
+    activeRecordNo: activeRecordNo.value,
+    selectedRecordNos: clonePlain(selectedRecordNos.value),
+    descriptions: clonePlain(generatedDescriptions.value),
+    selectedDescriptionId: selectedDescriptionId.value,
     ui: {
       showTables: showTables.value,
       showDescription: showDescription.value,
@@ -1478,7 +1610,8 @@ const projectStateSignature = () => {
   const data = buildProjectData();
   delete data.createdAt;
   delete data.ui;
-  delete data.selectedRecordNo;
+  delete data.selectedRecordNos;
+  delete data.selectedDescriptionId;
   delete data.activeRecordNo;
   if (data.activeFrame) delete data.activeFrame.hidden;
   return JSON.stringify(data);
@@ -1671,7 +1804,17 @@ const restoreProject = async (project, filePath) => {
     const { record_no, ...state } = rec;
     recordFrames.set(Number(record_no), clonePlain(state));
   });
-  selectedRecordNo.value = project.selectedRecordNo ?? null;
+  selectedRecordNos.value = project.selectedRecordNos
+    ?? (project.selectedRecordNo != null ? [project.selectedRecordNo] : []);
+  generatedDescriptions.value = clonePlain(project.descriptions || []);
+  selectedDescriptionId.value = project.selectedDescriptionId ?? null;
+  if (
+    !generatedDescriptions.value.some(
+      (description) => description.id === selectedDescriptionId.value,
+    )
+  ) {
+    selectedDescriptionId.value = generatedDescriptions.value[0]?.id ?? null;
+  }
   showTables.value = Boolean(project.ui?.showTables);
   showDescription.value = project.ui?.showDescription !== false;
 
@@ -1684,9 +1827,9 @@ const restoreProject = async (project, filePath) => {
   // восстановить настройки после setupScene (addScaleBar сбросил ready)
   Object.assign(om.value, clonePlain(savedOm));
 
-  activeRecordNo = project.activeRecordNo ?? null;
-  if (activeRecordNo != null) {
-    om.value.current_record_id = activeRecordNo;
+  activeRecordNo.value = project.activeRecordNo ?? null;
+  if (activeRecordNo.value != null) {
+    om.value.current_record_id = activeRecordNo.value;
     bus.emit("record-edit-state", { editing: true });
   } else {
     om.value.current_record_id =
@@ -1699,8 +1842,8 @@ const restoreProject = async (project, filePath) => {
 
   // после пересборки вернуть измерения и подпись текущей рамки
   Object.assign(om.value, clonePlain(savedOm));
-  if (activeRecordNo != null) {
-    om.value.current_record_id = activeRecordNo;
+  if (activeRecordNo.value != null) {
+    om.value.current_record_id = activeRecordNo.value;
   } else {
     om.value.current_record_id =
       active.recordId ?? Number(om.value.record_no) + 1;
@@ -1715,7 +1858,9 @@ const restoreProject = async (project, filePath) => {
   } else {
     activeFrameHidden.value = false;
   }
-  if (activeRecordNo != null) setFrozenVisibility(activeRecordNo, "0");
+  if (activeRecordNo.value != null) {
+    setFrozenVisibility(activeRecordNo.value, "0");
+  }
 
   // блокировка перетаскивания картинки
   mainimage.draggable(!om.value.settings.image_lock);
@@ -1841,6 +1986,13 @@ image {
 
 /* Ряд канваса не должен зависеть от размера SVG: иначе явная высота
    svg через intrinsic size увеличивает страницу и появляются скроллбары */
+/* Рабочая область: графики слева, холст справа */
+.canvas-workspace {
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+}
+
 .canvas-row {
   position: relative;
   flex: 1 1 0%;
@@ -1861,5 +2013,62 @@ image {
   top: 12px;
   left: 12px;
   z-index: 2;
+}
+
+/* Панель графиков слева от холста */
+.graphs-panel {
+  flex: 0 0 34%;
+  min-width: 320px;
+  max-width: 520px;
+  min-height: 0;
+  display: flex;
+  overflow: auto;
+}
+
+/* Если холст скрыт, графики занимают всю рабочую область */
+.graphs-panel--full {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+/* Отдельное окно графиков: размеры меняются за правый нижний угол */
+.graph-window {
+  position: relative;
+  width: 80vw;
+  height: 80vh;
+  min-width: 420px;
+  min-height: 320px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-window > .graphs-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.graph-window__resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+}
+
+.graph-window__resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #888;
+  border-bottom: 2px solid #888;
 }
 </style>
