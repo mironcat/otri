@@ -931,6 +931,29 @@ onBeforeUnmount(() => {
   }
 });
 
+// Измерения латеральной части записи из текущих значений мер (om.value)
+const lateralRowValues = ({ length, height, ad, pd, av, pv, v, side }) => ({
+  side,
+  length,
+  height,
+  ad_alfa: ad.alfa, ad_hc: ad.hc, ad_vc: ad.vc, ad_ln: ad.ln, ad_sln: ad.sln,
+  pd_alfa: pd.alfa, pd_hc: pd.hc, pd_vc: pd.vc, pd_ln: pd.ln, pd_sln: pd.sln,
+  av_alfa: av.alfa, av_hc: av.hc, av_vc: av.vc, av_ln: av.ln, av_sln: av.sln,
+  pv_alfa: pv.alfa, pv_hc: pv.hc, pv_vc: pv.vc, pv_ln: pv.ln, pv_sln: pv.sln,
+  v_lv: v.lv, v_lvl: v.lvl, v_dv: v.dv,
+});
+
+// Измерения дорсальной части записи из текущих значений мер (om.value)
+const dorsalRowValues = ({ fullness, length_dorsal, width, al, pl, ar, pr }) => ({
+  length_dorsal,
+  width,
+  fullness,
+  ar_alfa: ar.alfa, ar_hc: ar.hc, ar_vc: ar.vc, ar_ln: ar.ln, ar_sln: ar.sln,
+  pr_alfa: pr.alfa, pr_hc: pr.hc, pr_vc: pr.vc, pr_ln: pr.ln, pr_sln: pr.sln,
+  al_alfa: al.alfa, al_hc: al.hc, al_vc: al.vc, al_ln: al.ln, al_sln: al.sln,
+  pl_alfa: pl.alfa, pl_hc: pl.hc, pl_vc: pl.vc, pl_ln: pl.ln, pl_sln: pl.sln,
+});
+
 // Обновить существующую запись новыми измерениями и геометрией
 const updateRecord = (recordNo) => {
   if (!recordNo) return;
@@ -978,30 +1001,12 @@ const updateRecord = (recordNo) => {
   basedata.record_no = recordNo;
 
   if (om.value.lateral_side) {
-    const lateraldata = (({ length, height, ad, pd, av, pv, v, side }) => ({
-      side,
-      length,
-      height,
-      ad_alfa: ad.alfa, ad_hc: ad.hc, ad_vc: ad.vc, ad_ln: ad.ln, ad_sln: ad.sln,
-      pd_alfa: pd.alfa, pd_hc: pd.hc, pd_vc: pd.vc, pd_ln: pd.ln, pd_sln: pd.sln,
-      av_alfa: av.alfa, av_hc: av.hc, av_vc: av.vc, av_ln: av.ln, av_sln: av.sln,
-      pv_alfa: pv.alfa, pv_hc: pv.hc, pv_vc: pv.vc, pv_ln: pv.ln, pv_sln: pv.sln,
-      v_lv: v.lv, v_lvl: v.lvl, v_dv: v.dv,
-    }))(rawdata);
+    const lateraldata = lateralRowValues(rawdata);
     const idx = findRowIdx(rows.value.lateral, recordNo);
     if (idx >= 0) rows.value.lateral[idx] = Object.assign({}, basedata, lateraldata);
   }
   if (om.value.dorsal_side) {
-    const dorsaldata = (({
-      fullness, length_dorsal, width, al, pl, ar, pr,
-    }) => ({
-      length_dorsal, width,
-      fullness,
-      ar_alfa: ar.alfa, ar_hc: ar.hc, ar_vc: ar.vc, ar_ln: ar.ln, ar_sln: ar.sln,
-      pr_alfa: pr.alfa, pr_hc: pr.hc, pr_vc: pr.vc, pr_ln: pr.ln, pr_sln: pr.sln,
-      al_alfa: al.alfa, al_hc: al.hc, al_vc: al.vc, al_ln: al.ln, al_sln: al.sln,
-      pl_alfa: pl.alfa, pl_hc: pl.hc, pl_vc: pl.vc, pl_ln: pl.ln, pl_sln: pl.sln,
-    }))(rawdata);
+    const dorsaldata = dorsalRowValues(rawdata);
     const idx = findRowIdx(rows.value.dorsal, recordNo);
     if (idx >= 0) rows.value.dorsal[idx] = Object.assign({}, basedata, dorsaldata);
   }
@@ -1068,82 +1073,14 @@ const addRecord = () => {
 
   if (om.value.lateral_side) {
     // ========== НОВАЯ СТРУКТУРА ДАННЫХ (разделенные поля) ==========
-    const lateraldata = (({ length, height, ad, pd, av, pv, v, side }) => ({
-      side,
-      length,
-      height,
-      // AD измерения
-      ad_alfa: ad.alfa,
-      ad_hc: ad.hc,
-      ad_vc: ad.vc,
-      ad_ln: ad.ln,
-      ad_sln: ad.sln,
-      // PD измерения
-      pd_alfa: pd.alfa,
-      pd_hc: pd.hc,
-      pd_vc: pd.vc,
-      pd_ln: pd.ln,
-      pd_sln: pd.sln,
-      // AV измерения
-      av_alfa: av.alfa,
-      av_hc: av.hc,
-      av_vc: av.vc,
-      av_ln: av.ln,
-      av_sln: av.sln,
-      // PV измерения
-      pv_alfa: pv.alfa,
-      pv_hc: pv.hc,
-      pv_vc: pv.vc,
-      pv_ln: pv.ln,
-      pv_sln: pv.sln,
-      // V измерения
-      v_lv: v.lv,
-      v_lvl: v.lvl,
-      v_dv: v.dv,
-    }))(rawdata);
+    const lateraldata = lateralRowValues(rawdata);
 
     rows.value.lateral.push(Object.assign({}, basedata, lateraldata));
   }
 
   if (om.value.dorsal_side) {
     // ========== НОВАЯ СТРУКТУРА ДАННЫХ (разделенные поля) ==========
-    const dorsaldata = (({
-      fullness,
-      length_dorsal,
-      width,
-      al,
-      pl,
-      ar,
-      pr,
-    }) => ({
-      length_dorsal,
-      width,
-      // AR измерения
-      fullness: fullness,
-      ar_alfa: ar.alfa,
-      ar_hc: ar.hc,
-      ar_vc: ar.vc,
-      ar_ln: ar.ln,
-      ar_sln: ar.sln,
-      // PR измерения
-      pr_alfa: pr.alfa,
-      pr_hc: pr.hc,
-      pr_vc: pr.vc,
-      pr_ln: pr.ln,
-      pr_sln: pr.sln,
-      // AL измерения
-      al_alfa: al.alfa,
-      al_hc: al.hc,
-      al_vc: al.vc,
-      al_ln: al.ln,
-      al_sln: al.sln,
-      // PL измерения
-      pl_alfa: pl.alfa,
-      pl_hc: pl.hc,
-      pl_vc: pl.vc,
-      pl_ln: pl.ln,
-      pl_sln: pl.sln,
-    }))(rawdata);
+    const dorsaldata = dorsalRowValues(rawdata);
 
     rows.value.dorsal.push(Object.assign({}, basedata, dorsaldata));
   }
@@ -1384,7 +1321,6 @@ const addScaleBar = () => {
     draw,
     scales.value,
     onScalebarLengthEdited,
-    onScalebarEndpointsDragStart,
     onScalebarEndpointsDragEnd,
   );
   positionScalebarBurned(draw, scalebar);
@@ -1438,28 +1374,135 @@ const DORSAL_LINEAR_FIELDS = [
   "pl_sln",
 ];
 
-// Пересчитать результаты, относящиеся к текущему файлу (по имени файла),
-// на коэффициент изменения масштаба. Записи других файлов не трогаем.
-const rescaleRowsForCurrentFile = (ratio) => {
-  const filename = om.value.filename;
-  if (!filename || !Number.isFinite(ratio) || ratio === 1) return;
+// --- Пересчёт таблицы при изменении калибровки ------------------------------
+// Значения пересчитываем не пропорцией, а так же, как кнопка «Обновить
+// запись»: временно применяем к наборам сохранённую геометрию записи и берём
+// свежие измерения при текущей калибровке. Поэтому результат совпадает с
+// ручным обновлением записи при любом зуме, режиме и положении рамки.
 
-  const rescaleRow = (row, fields) => {
+// Снимок текущего (живого) состояния наборов и режима измерения
+const captureLiveState = () => {
+  const sets = {};
+  overlayEntries().forEach(([key, obj]) => {
+    const state = captureSet(obj);
+    if (state) sets[key] = state;
+  });
+  return { sets, side: om.value.side, concave_vs: om.value.concave_vs };
+};
+
+// Применить геометрию записи к наборам так же, как при её активации.
+// Порядок восстановления задаёт, измерения какого набора останутся в om.value.
+const applyRecordGeometry = (rec, fallbackSide) => {
+  const ui = rec.ui || {};
+  om.value.side = ui.side ?? fallbackSide ?? om.value.side;
+  om.value.concave_vs =
+    ui.concave_vs !== undefined
+      ? Boolean(ui.concave_vs)
+      : Boolean(rec.concave && !rec.left);
+  if (om.value.concave_vs) {
+    if (rec.left) restoreSet(lso, rec.left);
+    if (rec.concave) restoreSet(concave_lso, rec.concave);
+  } else {
+    if (rec.concave) restoreSet(concave_lso, rec.concave);
+    if (rec.left) restoreSet(lso, rec.left);
+  }
+  if (rec.dorsal) restoreSet(dso, rec.dorsal);
+};
+
+// Восстановить снимок наборов: латеральные — в порядке режима (последним идёт
+// активный, его измерения и останутся), затем дорсальный.
+const restoreSetsForMode = (sets, concave) => {
+  const entries = overlayEntries();
+  const order = concave ? ["left", "concave"] : ["concave", "left"];
+  order.forEach((key) => {
+    const entry = entries.find(([k]) => k === key);
+    if (entry && sets[key]) restoreSet(entry[1], sets[key]);
+  });
+  const dorsal = entries.find(([k]) => k === "dorsal");
+  if (dorsal && sets.dorsal) restoreSet(dorsal[1], sets.dorsal);
+};
+
+// Пересчитать размеры в таблице для текущего файла (совпадение по filename).
+// prevFactor/newFactor нужны только для строк без сохранённой геометрии
+// (например, после повторного открытия того же файла): их пересчитываем
+// пропорционально изменению калибровки.
+const recalcRowsForCurrentFile = (prevFactor, newFactor) => {
+  const filename = om.value.filename;
+  if (typeof filename !== "string") return;
+  // без заданного масштаба пересчитывать не от чего
+  if (!om.value.settings.scalebar_ready) return;
+
+  const rowsOfFile = [...rows.value.lateral, ...rows.value.dorsal].filter(
+    (row) => row.filename === filename,
+  );
+  if (!rowsOfFile.length) return;
+
+  const oldFactor = Number(prevFactor);
+  const next = Number(newFactor);
+  const ratio =
+    Number.isFinite(oldFactor) && oldFactor > 0 && Number.isFinite(next) && next > 0
+      ? next / oldFactor
+      : 1;
+
+  // пересчёт по геометрии: как «Обновить запись» для каждой записи файла
+  const values = new Map();
+  const recordIds = [
+    ...new Set(
+      rowsOfFile
+        .filter((row) => recordFrames.has(row.record_no))
+        .map((row) => row.record_no),
+    ),
+  ];
+  if (recordIds.length) {
+    // запомнить живое состояние, чтобы вернуть его после пересчёта
+    const live = captureLiveState();
+    try {
+      recordIds.forEach((recordNo) => {
+        const rec = recordFrames.get(recordNo);
+        if (!rec) return;
+        const rowSide = rowsOfFile.find((row) => row.record_no === recordNo)?.side;
+        applyRecordGeometry(rec, rowSide);
+        const raw = { ...JSON.parse(JSON.stringify(om.value)) };
+        values.set(recordNo, {
+          // набора нет в записи — строку не трогаем
+          lateral: rec.left || rec.concave ? lateralRowValues(raw) : null,
+          dorsal: rec.dorsal ? dorsalRowValues(raw) : null,
+        });
+      });
+    } finally {
+      // вернуть живое состояние и пересчитать меры под восстановленную геометрию
+      om.value.side = live.side;
+      om.value.concave_vs = live.concave_vs;
+      restoreSetsForMode(live.sets, live.concave_vs);
+    }
+  }
+
+  // записать новые размеры в строки текущего файла
+  const applyValues = (row, fields, kind) => {
     if (row.filename !== filename) return row;
-    const next = { ...row };
+    const vals = values.get(row.record_no);
+    const source = vals ? vals[kind] : null;
+    if (!source && ratio === 1) return row;
+    const updated = { ...row };
     fields.forEach((field) => {
-      const value = Number(next[field]);
-      if (Number.isFinite(value)) next[field] = value * ratio;
+      const exact = source ? Number(source[field]) : NaN;
+      if (Number.isFinite(exact)) {
+        updated[field] = exact;
+        return;
+      }
+      // геометрии записи нет — пропорционально изменению калибровки
+      const current = Number(updated[field]);
+      if (Number.isFinite(current)) updated[field] = current * ratio;
     });
-    return next;
+    return updated;
   };
 
   rows.value = {
     lateral: rows.value.lateral.map((row) =>
-      rescaleRow(row, LATERAL_LINEAR_FIELDS),
+      applyValues(row, LATERAL_LINEAR_FIELDS, "lateral"),
     ),
     dorsal: rows.value.dorsal.map((row) =>
-      rescaleRow(row, DORSAL_LINEAR_FIELDS),
+      applyValues(row, DORSAL_LINEAR_FIELDS, "dorsal"),
     ),
   };
 };
@@ -1467,49 +1510,29 @@ const rescaleRowsForCurrentFile = (ratio) => {
 // Длину линейки можно изменить прямо на холсте. После этого пересчитываем
 // масштаб и пересчитываем уже сохранённые результаты текущего файла.
 const onScalebarLengthEdited = () => {
-  const oldFactor = Number(scales.value.factor) || 1;
+  const prevFactor = Number(scales.value.factor) || 1;
   getFactor();
-  const newFactor = Number(scales.value.factor);
-  if (
-    om.value.settings.scalebar_ready &&
-    Number.isFinite(newFactor) &&
-    newFactor > 0
-  ) {
-    rescaleRowsForCurrentFile(newFactor / oldFactor);
-  }
+  // до первого «Задать масштаб» линейку можно свободно двигать — это ещё не
+  // калибровка, сохранённые результаты не трогаем (проверка внутри)
+  recalcRowsForCurrentFile(prevFactor, Number(scales.value.factor));
   lso.updateMeasures();
   concave_lso.updateMeasures();
   dso.updateMeasures();
 };
 
-// Перетаскивание концов линейки — тоже изменение калибровки. Запоминаем
-// масштаб в начале, а в конце пересчитываем и обновляем сохранённые записи.
-let scalebarFactorBeforeDrag = 1;
-const onScalebarEndpointsDragStart = () => {
-  scalebarFactorBeforeDrag = Number(scales.value.factor) || 1;
-};
+// Перетаскивание концов линейки — тоже изменение калибровки.
 const onScalebarEndpointsDragEnd = () => {
-  const oldFactor = scalebarFactorBeforeDrag || 1;
+  const prevFactor = Number(scales.value.factor) || 1;
   getFactor();
-  const newFactor = Number(scales.value.factor);
-  if (
-    om.value.settings.scalebar_ready &&
-    Number.isFinite(newFactor) &&
-    newFactor > 0
-  ) {
-    rescaleRowsForCurrentFile(newFactor / oldFactor);
-  }
+  recalcRowsForCurrentFile(prevFactor, Number(scales.value.factor));
 };
 
 const setScaleBar = () => {
-  const oldFactor = Number(scales.value.factor) || 1;
+  const prevFactor = Number(scales.value.factor) || 1;
   om.value.settings.scalebar_ready = true;
   getFactor();
-  const newFactor = Number(scales.value.factor);
   // уже сохранённые результаты текущего файла пересчитываем под новый масштаб
-  if (Number.isFinite(newFactor) && newFactor > 0) {
-    rescaleRowsForCurrentFile(newFactor / oldFactor);
-  }
+  recalcRowsForCurrentFile(prevFactor, Number(scales.value.factor));
   lso.updateMeasures();
   concave_lso.updateMeasures();
   dso.updateMeasures();

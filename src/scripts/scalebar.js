@@ -9,7 +9,6 @@ function initScalebar(
   draw,
   scales,
   onLengthChange,
-  onEndpointsDragStart,
   onEndpointsDragEnd,
 ) {
   const scale_length = scales.length;
@@ -64,18 +63,11 @@ function initScalebar(
   });
 
   // После изменения концов линейки пересчитываем масштаб (в IndexPage).
-  const notifyEndpointsDragStart = () => {
-    if (typeof onEndpointsDragStart === "function") onEndpointsDragStart();
-  };
   const notifyEndpointsDragEnd = () => {
     if (typeof onEndpointsDragEnd === "function") onEndpointsDragEnd();
   };
-  scalebar_start
-    .on("dragstart", notifyEndpointsDragStart)
-    .on("dragend", notifyEndpointsDragEnd);
-  scalebar_end
-    .on("dragstart", notifyEndpointsDragStart)
-    .on("dragend", notifyEndpointsDragEnd);
+  scalebar_start.on("dragend", notifyEndpointsDragEnd);
+  scalebar_end.on("dragend", notifyEndpointsDragEnd);
 
   // двойной клик по линии — возвращаем линейку к состоянию по умолчанию.
   // Используем mousedown + таймштамп, потому что svg.draggable перехватывает
