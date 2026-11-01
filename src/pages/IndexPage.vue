@@ -67,50 +67,9 @@
       </q-btn>
       <!-- <q-chip>{{ scales.factor }}</q-chip> -->
     </div>
-    <div v-show="showTables" class="tables-panel q-mx-md q-mb-md">
-
-      <div class="tables-split">
-        <div class="tables-half col q-pr-sm">
-          <div class="row">
-            <div class="table-wrap">
-              <q-table class="compact-table" :rows="combinedRows" :columns="tableColumns" row-key="record_no" dense
-                no-data-label="нет данных" @row-click="onRowClick" :row-class="rowClass">
-                <template v-slot:body-cell-action="props">
-                  <q-td :props="props">
-                    <q-btn color="primary" icon-right="delete" no-caps flat dense
-                      @click.stop="deleteRecord(props.row)" />
-                  </q-td>
-                </template>
-                <template v-slot:top-left>
-                  <strong>Результаты измерений</strong>
-                </template>
-                <template v-slot:top-right>
-                  <q-btn size="sm" no-caps class="q-ml-sm" :color="showDescription ? 'secondary' : 'primary'"
-                    :icon="showDescription ? 'visibility_off' : 'visibility'"
-                    :label="showDescription ? 'Скрыть описание' : 'Показать описание'"
-                    @click="showDescription = !showDescription">
-                    <q-tooltip>{{ showDescription ? 'Скрыть текстовое описание' : 'Показать текстовое описание'
-                    }}</q-tooltip>
-                  </q-btn>
-                </template>
-              </q-table>
-            </div>
-          </div>
-        </div>
-        <div v-show="showDescription" class="description-half col q-pl-md">
-          <div class="row items-center q-mb-xs">
-            <div class="text-subtitle2">Описание</div>
-            <q-space />
-            <q-select v-model="selectedRecordNo" :options="recordOptions" option-value="record_no"
-              option-label="recordLabel" emit-value map-options dense outlined options-dense label="Запись"
-              :disable="recordOptions.length === 0" class="record-select" @update:model-value="onRecordSelected" />
-          </div>
-          <div class="description-body">
-            <Description :om="selectedMeasurements" />
-          </div>
-        </div>
-      </div>
-    </div>
+    <ResultsPanel v-show="showTables" :rows="rows" v-model:selected-record-no="selectedRecordNo"
+      v-model:show-description="showDescription" @edit-record="activateRecord"
+      @delete-record="confirmDeleteRecord" />
   </q-page>
 </template>
 <script setup>
@@ -118,126 +77,16 @@ import { useQuasar } from "quasar";
 
 const $q = useQuasar();
 
-function wrapCsvValue(val, formatFn, row) {
-  let formatted = formatFn !== void 0 ? formatFn(val, row) : val;
-
-  formatted =
-    formatted === void 0 || formatted === null ? "" : String(formatted);
-
-  formatted = formatted.split('"').join('""');
-  /**
-   * Excel accepts \n and \r in strings, but some other CSV parsers do not
-   * Uncomment the next two lines to escape new lines
-   */
-  // .split('\n').join('\\n')
-  // .split('\r').join('\\r')
-
-  return `"${formatted}"`;
-}
-
-// Вспомогательная функция для форматирования чисел
-const formatNumber = (val) =>
-  val !== undefined && val !== null ? `${val.toFixed()}` : "";
-// Значения данных (left/right, full/half) остаются прежними —
-// переводим только их отображение в таблицах и CSV
-const formatSide = (val) =>
-  val === "right" ? "правая" : val === "left" ? "левая" : val;
-const formatFullness = (val) =>
-  val === "half" ? "половина" : val === "full" ? "полная" : val;
-const baseColumns = [
-  { name: "action", label: "Удалить", field: "action" },
-  {
-    name: "no",
-    align: "center",
-    label: "№",
-    field: "record_no",
-    sortable: true,
-  },
-  {
-    name: "filename",
-    required: true,
-    label: "Имя файла",
-    align: "left",
-    field: "filename",
-    // format: val => `File:${val}`,
-    sortable: true,
-  },
-  {
-    name: "label",
-    align: "center",
-    label: "Метка",
-    field: "label",
-    sortable: true,
-  },
-];
-// Колонки объединённой таблицы: латеральные и дорсальные данные в одной строке
-const tableColumns = baseColumns.concat([
-  {
-    name: "side",
-    align: "center",
-    label: "Сторона",
-    field: "side",
-    format: formatSide,
-    sortable: true,
-  },
-  {
-    name: "fullness",
-    align: "center",
-    label: "Полнота",
-    field: "fullness",
-    format: formatFullness,
-    sortable: true,
-  },
-  {
-    name: "length",
-    align: "center",
-    label: "L",
-    field: "length",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "height",
-    align: "center",
-    label: "H",
-    field: "height",
-    format: formatNumber,
-    sortable: true,
-  },
-  {
-    name: "width",
-    align: "center",
-    label: "W",
-    field: "width",
-    format: formatNumber,
-    sortable: true,
-  },
-]);
 const rows = ref({
   lateral: [],
   dorsal: [],
-});
-// Единая таблица: латеральная и дорсальная части одной записи
-// объединяются по record_no (та же логика, что и в экспорте CSV)
-const combinedRows = computed(() => {
-  const merged = new Map();
-  const mergeRow = (row) => {
-    merged.set(row.record_no, {
-      ...(merged.get(row.record_no) || {}),
-      ...row,
-    });
-  };
-  rows.value.lateral.forEach(mergeRow);
-  rows.value.dorsal.forEach(mergeRow);
-  return [...merged.values()].sort((a, b) => a.record_no - b.record_no);
 });
 // Видимость таблиц с измерениями под canvas
 const showTables = ref(false);
 // Видимость текстового описания (правая половина нижней панели)
 const showDescription = ref(true);
 
-import { watch, inject, computed, nextTick } from "vue";
-import { exportFile } from "quasar";
+import { watch, inject, nextTick } from "vue";
 import "@svgdotjs/svg.draggable.js";
 import { Matrix, Point } from "@svgdotjs/svg.js";
 import { onMounted, onBeforeUnmount, ref } from "vue";
@@ -253,8 +102,8 @@ import DorsalSideObjects from "@/scripts/dorsalobjects.js";
 import concaveLeftSideObjects from "@/scripts/concaveobjects.js";
 import { initGuides, resizeGuides } from "@/scripts/guides.js";
 import { initMagnifier } from "@/scripts/magnifier.js";
-import { combineRecordMeasurements } from "@/scripts/interpretation.js";
-import Description from "@/components/Description.vue";
+import { exportCombinedTable as exportResultsCsv } from "@/scripts/resultsCsv.js";
+import ResultsPanel from "@/components/results/ResultsPanel.vue";
 
 const canvasRef = ref();
 // let imagepath = ref('/src/assets/ost1.jpg')
@@ -301,84 +150,6 @@ const selectedRecordNo = ref(null);
 // Активная рамка скрыта после сохранения записи — кнопка «Создать рамку» доступна
 const activeFrameHidden = ref(false);
 
-// Список записей: латеральная и дорсальная строки объединяются по record_no
-const recordOptions = computed(() => {
-  const records = new Map();
-  rows.value.lateral.forEach((row) => {
-    records.set(row.record_no, {
-      record_no: row.record_no,
-      label: row.label,
-      filename: row.filename,
-      sides: ["Л"],
-    });
-  });
-  rows.value.dorsal.forEach((row) => {
-    const record = records.get(row.record_no);
-    if (record) {
-      record.sides.push("Д");
-    } else {
-      records.set(row.record_no, {
-        record_no: row.record_no,
-        label: row.label,
-        filename: row.filename,
-        sides: ["Д"],
-      });
-    }
-  });
-  return [...records.values()]
-    .sort((a, b) => a.record_no - b.record_no)
-    .map((record) => ({
-      ...record,
-      recordLabel: `№ ${record.record_no} — ${record.label || "без метки"} (${record.sides.join("+")})`,
-    }));
-});
-
-// Если выбранной записи больше нет (например, её удалили),
-// выбираем последнюю сохранённую
-watch(recordOptions, (options) => {
-  if (!options.length) {
-    selectedRecordNo.value = null;
-    return;
-  }
-  if (!options.some((option) => option.record_no === selectedRecordNo.value)) {
-    selectedRecordNo.value = options[options.length - 1].record_no;
-  }
-});
-
-// Строки таблиц для выбранной записи
-const selectedRecord = computed(() => {
-  const recordNo = selectedRecordNo.value;
-  if (recordNo === null || recordNo === undefined) return null;
-  return {
-    lateral:
-      rows.value.lateral.find((row) => row.record_no === recordNo) || null,
-    dorsal:
-      rows.value.dorsal.find((row) => row.record_no === recordNo) || null,
-  };
-});
-
-// Измерения выбранной записи для компонента описания
-const selectedMeasurements = computed(() => {
-  const record = selectedRecord.value;
-  if (!record) return null;
-  return combineRecordMeasurements(record.lateral, record.dorsal);
-});
-
-// Клик по строке таблицы выбирает запись и показывает её описание
-const onRowClick = (evt, row) => {
-  if (row?.record_no === undefined || row?.record_no === null) return;
-  selectedRecordNo.value = row.record_no;
-  // активируем сохранённую геометрию записи для редактирования
-  activateRecord(row.record_no);
-  showDescription.value = true;
-};
-
-// Выбор записи в списке описания тоже активирует её наборы
-const onRecordSelected = (recordNo) => {
-  if (recordNo === undefined || recordNo === null) return;
-  activateRecord(recordNo);
-};
-
 // Поиск индекса строки в массиве rows по номеру записи
 const findRowIdx = (arr, recordNo) => {
   for (let i = arr.length - 1; i >= 0; i--) {
@@ -387,11 +158,6 @@ const findRowIdx = (arr, recordNo) => {
   return -1;
 };
 
-// Подсветка строки выбранной записи
-const rowClass = computed(
-  () => (row) =>
-    row.record_no === selectedRecordNo.value ? "selected-record-row" : "",
-);
 // length — заданная физическая длина линейки;
 // factor — физических единиц на пиксель исходного изображения (не экрана);
 // zoom — относительное увеличение (для служебных нужд, на калибровку не влияет).
@@ -490,6 +256,18 @@ const hideActiveFrame = () => {
   activeFrameHidden.value = true;
 };
 
+// Новая рамка всегда создаётся с открытыми замками: следование за картинкой
+// не должно включаться само при переходе к следующей записи.
+const resetFrameLocks = () => {
+  if (!om.value.settings.pinToImage) {
+    om.value.settings.pinToImage = { left: false, dorsal: false };
+  }
+  om.value.settings.pinToImage.left = false;
+  om.value.settings.pinToImage.dorsal = false;
+  bus.emit("pin-image-toggled", { frame: "left", value: false });
+  bus.emit("pin-image-toggled", { frame: "dorsal", value: false });
+};
+
 const createActiveFrame = () => {
   if (!activeFrameHidden.value) return;
   if (!om.value.lateral_side && !om.value.dorsal_side) {
@@ -500,6 +278,7 @@ const createActiveFrame = () => {
     });
     return;
   }
+  resetFrameLocks();
   showActiveFrame();
 };
 
@@ -558,6 +337,11 @@ const captureUI = () => ({
   half: om.value.half,
   fullness: om.value.fullness,
   label: om.value.label,
+  // состояние замков («следование за картинкой») на момент сохранения записи
+  pin: {
+    left: Boolean(om.value.settings.pinToImage?.left),
+    dorsal: Boolean(om.value.settings.pinToImage?.dorsal),
+  },
 });
 
 // Вернуть геометрию набора из снимка (трансформация пересчитывается
@@ -616,6 +400,17 @@ const applyRecord = (rec) => {
     if (rec.left) restoreSet(lso, rec.left);
   }
   if (rec.dorsal) restoreSet(dso, rec.dorsal);
+  // восстановить состояние замков этой записи (старые проекты — открытые)
+  if (!om.value.settings.pinToImage) {
+    om.value.settings.pinToImage = { left: false, dorsal: false };
+  }
+  const pin = ui.pin || {};
+  const pinLeft = Boolean(pin.left);
+  const pinDorsal = Boolean(pin.dorsal);
+  om.value.settings.pinToImage.left = pinLeft;
+  om.value.settings.pinToImage.dorsal = pinDorsal;
+  bus.emit("pin-image-toggled", { frame: "left", value: pinLeft });
+  bus.emit("pin-image-toggled", { frame: "dorsal", value: pinDorsal });
   // после смены трансформации групп пересчитываем позицию/масштаб иконок
   bus.emit("overlays-transformed");
 };
@@ -1102,6 +897,20 @@ const handleRecordAction = () => {
 };
 
 bus.on("add-record", handleRecordAction);
+
+// Подтверждение перед удалением: запись нельзя восстановить,
+// поэтому спрашиваем пользователя и по умолчанию оставляем «Отмена».
+const confirmDeleteRecord = (row) => {
+  const label = row.label ? ` «${row.label}»` : "";
+  $q.dialog({
+    title: "Удаление записи",
+    message: `Удалить запись №${row.record_no}${label}?`,
+    cancel: { label: "Отмена", flat: true, color: "grey" },
+    ok: { label: "Удалить", color: "negative", unelevated: true },
+    persistent: true,
+    focus: "cancel",
+  }).onOk(() => deleteRecord(row));
+};
 
 const deleteRecord = (row) => {
   rows.value.lateral = rows.value.lateral.filter(
@@ -1996,121 +1805,8 @@ const onCloseRequest = async () => {
 // Кнопки сохранения/открытия находятся в шапке MainLayout
 bus.on("save-project", saveProject);
 bus.on("open-project", openProject);
-const combinedColumns = [
-  {
-    name: "no",
-    label: "№",
-    field: "record_no",
-    sortable: true,
-    format: formatNumber,
-  },
-  { name: "filename", label: "Имя файла", field: "filename", sortable: true },
-  { name: "label", label: "Метка", field: "label", sortable: true },
-  { name: "side", label: "Сторона", field: "side", format: formatSide },
-  {
-    name: "fullness",
-    label: "Полнота",
-    field: "fullness",
-    format: formatFullness,
-  },
-  { name: "length", label: "L", field: "length", format: formatNumber },
-  { name: "height", label: "H", field: "height", format: formatNumber },
-  { name: "width", label: "W", field: "width", format: formatNumber },
-  { name: "ad_alfa", label: "AD-alfa", field: "ad_alfa", format: formatNumber },
-  { name: "ad_hc", label: "AD-l", field: "ad_hc", format: formatNumber },
-  { name: "ad_vc", label: "AD-h", field: "ad_vc", format: formatNumber },
-  { name: "ad_ln", label: "AD-n", field: "ad_ln", format: formatNumber },
-  { name: "ad_sln", label: "AD-s", field: "ad_sln", format: formatNumber },
-  { name: "pd_alfa", label: "PD-alfa", field: "pd_alfa", format: formatNumber },
-  { name: "pd_hc", label: "PD-l", field: "pd_hc", format: formatNumber },
-  { name: "pd_vc", label: "PD-h", field: "pd_vc", format: formatNumber },
-  { name: "pd_ln", label: "PD-n", field: "pd_ln", format: formatNumber },
-  { name: "pd_sln", label: "PD-s", field: "pd_sln", format: formatNumber },
-  { name: "av_alfa", label: "AV-alfa", field: "av_alfa", format: formatNumber },
-  { name: "av_hc", label: "AV-l", field: "av_hc", format: formatNumber },
-  { name: "av_vc", label: "AV-h", field: "av_vc", format: formatNumber },
-  { name: "av_ln", label: "AV-n", field: "av_ln", format: formatNumber },
-  { name: "av_sln", label: "AV-s", field: "av_sln", format: formatNumber },
-  { name: "pv_alfa", label: "PV-alfa", field: "pv_alfa", format: formatNumber },
-  { name: "pv_hc", label: "PV-l", field: "pv_hc", format: formatNumber },
-  { name: "pv_vc", label: "PV-h", field: "pv_vc", format: formatNumber },
-  { name: "pv_ln", label: "PV-n", field: "pv_ln", format: formatNumber },
-  { name: "pv_sln", label: "PV-s", field: "pv_sln", format: formatNumber },
-  { name: "ar_alfa", label: "AR-alfa", field: "ar_alfa", format: formatNumber },
-  { name: "ar_hc", label: "AR-l", field: "ar_hc", format: formatNumber },
-  { name: "ar_vc", label: "AR-h", field: "ar_vc", format: formatNumber },
-  { name: "ar_ln", label: "AR-n", field: "ar_ln", format: formatNumber },
-  { name: "ar_sln", label: "AR-s", field: "ar_sln", format: formatNumber },
-  { name: "pr_alfa", label: "PR-alfa", field: "pr_alfa", format: formatNumber },
-  { name: "pr_hc", label: "PR-l", field: "pr_hc", format: formatNumber },
-  { name: "pr_vc", label: "PR-h", field: "pr_vc", format: formatNumber },
-  { name: "pr_ln", label: "PR-n", field: "pr_ln", format: formatNumber },
-  { name: "pr_sln", label: "PR-s", field: "pr_sln", format: formatNumber },
-  { name: "al_alfa", label: "AL-alfa", field: "al_alfa", format: formatNumber },
-  { name: "al_hc", label: "AL-l", field: "al_hc", format: formatNumber },
-  { name: "al_vc", label: "AL-h", field: "al_vc", format: formatNumber },
-  { name: "al_ln", label: "AL-n", field: "al_ln", format: formatNumber },
-  { name: "al_sln", label: "AL-s", field: "al_sln", format: formatNumber },
-  { name: "pl_alfa", label: "PL-alfa", field: "pl_alfa", format: formatNumber },
-  { name: "pl_hc", label: "PL-l", field: "pl_hc", format: formatNumber },
-  { name: "pl_vc", label: "PL-h", field: "pl_vc", format: formatNumber },
-  { name: "pl_ln", label: "PL-n", field: "pl_ln", format: formatNumber },
-  { name: "pl_sln", label: "PL-s", field: "pl_sln", format: formatNumber },
-];
-
-const exportCombinedTable = () => {
-  const mergedData = {};
-
-  rows.value.lateral.forEach((row) => {
-    const key = row.record_no;
-    if (!mergedData[key]) {
-      mergedData[key] = {};
-    }
-    mergedData[key] = { ...mergedData[key], ...row };
-  });
-
-  rows.value.dorsal.forEach((row) => {
-    const key = row.record_no;
-    if (!mergedData[key]) {
-      mergedData[key] = {};
-    }
-    mergedData[key] = {
-      ...mergedData[key],
-      ...row,
-      length: row.length_dorsal || mergedData[key].length,
-    };
-  });
-
-  const mergedRows = Object.values(mergedData);
-
-  const content = [combinedColumns.map((col) => wrapCsvValue(col.label))]
-    .concat(
-      mergedRows.map((row) =>
-        combinedColumns
-          .map((col) =>
-            wrapCsvValue(
-              typeof col.field === "function"
-                ? col.field(row)
-                : row[col.field === void 0 ? col.name : col.field],
-              col.format,
-              row
-            )
-          )
-          .join(",")
-      )
-    )
-    .join("\r\n");
-
-  const status = exportFile("combined-table-export.csv", content, "text/csv");
-
-  if (status !== true) {
-    $q.notify({
-      message: "Браузер запретил скачивание файла...",
-      color: "negative",
-      icon: "warning",
-    });
-  }
-};
+// Кнопка экспорта в шапке вызывает общий модуль CSV
+const exportCombinedTable = () => exportResultsCsv(rows.value, $q);
 </script>
 <style>
 image {
@@ -2165,116 +1861,5 @@ image {
   top: 12px;
   left: 12px;
   z-index: 2;
-}
-
-/* Нижняя панель: слева таблицы, справа текстовое описание.
-   Ограниченная высота + независимая прокрутка половин,
-   чтобы канвас всегда сохранял свободное место */
-.tables-panel {
-  flex: 0 1 auto;
-  min-height: 0;
-  max-height: 40vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Две равные половины по горизонтали */
-.tables-split {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-}
-
-.tables-half {
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* Правая половина с описанием */
-.description-half {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--otri-border-soft);
-}
-
-/* Селектор записи в заголовке описания */
-.record-select {
-  min-width: 190px;
-  max-width: 260px;
-}
-
-/* Прокручиваемая область описания */
-.description-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  border: 1px solid var(--otri-border);
-  border-radius: 4px;
-  padding: 8px;
-  background: var(--otri-surface);
-}
-
-/* Клик по строке таблицы выбирает запись для описания */
-.tables-half .q-table tbody tr {
-  cursor: pointer;
-}
-
-/* Подсветка выбранной записи */
-.q-table tbody tr.selected-record-row,
-.q-table tbody tr.selected-record-row>td {
-  background: var(--otri-selected-row);
-}
-
-/* Таблицы подстраиваются под ширину половины панели:
-   без горизонтальной прокрутки, содержимое переносится */
-.table-wrap {
-  width: 100%;
-  min-width: 0;
-}
-
-.tables-half .q-table__middle {
-  overflow-x: hidden;
-}
-
-.tables-half table.q-table {
-  table-layout: fixed;
-  width: 100%;
-}
-
-/* Верхняя панель таблицы (заголовок и кнопка экспорта)
-   тоже переносится, а не расширяет таблицу */
-.tables-half .q-table__top {
-  flex-wrap: wrap;
-}
-
-/* Узкие колонки для компактного отображения */
-.q-table th,
-.q-table td {
-  padding: 4px 8px;
-  font-size: 12px;
-}
-
-/* Заголовки и ячейки с переносом текста */
-.q-table th,
-.q-table td {
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
-.q-table th {
-  max-width: 100px;
-}
-
-/* Компактные строки объединённой таблицы результатов */
-.compact-table .q-table__middle table.q-table th,
-.compact-table .q-table__middle table.q-table td {
-  padding: 2px 6px;
-  line-height: 1.15;
-  vertical-align: middle;
 }
 </style>
