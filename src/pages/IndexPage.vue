@@ -65,7 +65,7 @@
       <q-btn v-show="rows.lateral.length > 0 || rows.dorsal.length > 0" color="brown" icon-right="archive"
         label="Экспорт в CSV" no-caps @click="exportCombinedTable" />
       <!-- TEMP: кнопка нагрузочного теста. Удалить вместе с generateLoadTestData. -->
-      <q-btn v-if="isDev" color="deep-orange" icon="science" label="TEMP: 50 записей" no-caps
+      <q-btn v-if="isDev" color="deep-orange" icon="science" :label="`ТЕСТ: ${LOAD_TEST_RECORD_COUNT} записей`" no-caps
         @click="confirmLoadTestData">
         <q-tooltip>Временная генерация 50 рамок и записей для нагрузочного теста</q-tooltip>
       </q-btn>
@@ -79,8 +79,8 @@
     <ResultsPanel v-show="showTables" :class="{ 'tables-panel--expanded': canvasHidden }" :rows="rows"
       :active-record-no="activeRecordNo" v-model:selected-record-nos="selectedRecordNos"
       v-model:descriptions="generatedDescriptions" v-model:selected-description-id="selectedDescriptionId"
-      v-model:show-description="showDescription" @focus-record="focusedRecordNo = $event"
-      @edit-record="activateRecord" @delete-record="confirmDeleteRecord" />
+      v-model:show-description="showDescription" @focus-record="focusedRecordNo = $event" @edit-record="activateRecord"
+      @delete-record="confirmDeleteRecord" />
   </q-page>
 </template>
 <script setup>
@@ -1062,14 +1062,14 @@ const addRecord = () => {
 // Остальные измерения заполняются нулями (по умолчанию).
 // Удалить этот блок, флаг isDev и кнопку "TEMP: 50 записей" после проверки.
 // ============================================================================
-const LOAD_TEST_RECORD_COUNT = 50;
+const LOAD_TEST_RECORD_COUNT = 200;
 
 // Усечённое нормальное распределение: среднее — середина диапазона,
 // сигма — шестая часть диапазона (в границы попадает ~99.7% значений).
 const loadTestNormalValue = (min, max) => {
   const mean = (min + max) / 2;
   const sigma = (max - min) / 6;
-  for (;;) {
+  for (; ;) {
     const u1 = 1 - Math.random();
     const u2 = Math.random();
     const value =
