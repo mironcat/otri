@@ -1,6 +1,6 @@
 {
   "name": "otri",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Otri: Fossil *O*stracod measuring using *tri*angles",
   "productName": "Otri",
   "author": "Eugeny Karasev <534temp@gmail.com>",
@@ -20,7 +20,7 @@
     "build:electron:debug": "quasar build -m electron -d",
     "build:electron:ui": "quasar build -m electron -s",
     "clean": "quasar clean",
-    "artifact:win": "powershell Copy-Item \"dist/electron/Packaged/Otri-Setup-*.exe\" \"dist/\" -Force",
+    "artifact:win": "powershell Copy-Item \"dist/electron/Packaged/Otri-Windows-Setup-*.exe\" \"dist/\" -Force",
     "installer:win": "npm run build:electron:win64 && npm run artifact:win",
     "zip:linux": "powershell Compress-Archive -Path \"dist/electron/Packaged/linux-unpacked/*\" -DestinationPath \"dist/Otri_Linux_x64_Portable.zip\" -Force",
     "release": "npm run clean && npm run installer:win && npm run build:electron:linux && npm run zip:linux",

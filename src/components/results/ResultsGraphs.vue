@@ -7,21 +7,18 @@
           <q-btn-toggle v-model="chartType" no-caps dense unelevated toggle-color="primary" :options="[
             { label: 'Violin', value: 'violin' },
             { label: 'BoxPlot', value: 'boxPlot' },
+            { label: 'Scatter', value: 'scatter' },
+            { label: 'Histogram', value: 'histogram' },
           ]" />
-          <q-btn-toggle v-model="orientation" no-caps dense unelevated toggle-color="primary" :options="[
-            { label: 'Гориз.', value: 'horizontal' },
-            { label: 'Верт.', value: 'vertical' },
-          ]" />
+          <q-btn-toggle v-if="showOrientation" v-model="orientation" no-caps dense unelevated toggle-color="primary"
+            :options="[
+              { label: 'Гориз.', value: 'horizontal' },
+              { label: 'Верт.', value: 'vertical' },
+            ]" />
           <div class="text-caption text-grey-7">Записей: {{ records.length }}</div>
-          <q-btn v-if="!windowMode" icon="open_in_new" flat dense round @click="emit('open-window')">
-            <q-tooltip>Открыть в отдельном окне</q-tooltip>
-          </q-btn>
-          <q-btn v-else icon="close" flat dense round @click="emit('close-window')">
-            <q-tooltip>Закрыть окно</q-tooltip>
-          </q-btn>
         </div>
       </div>
-      <div v-if="lengths.length || heights.length || widths.length"
+      <div v-if="chartType !== 'scatter' && (lengths.length || heights.length || widths.length)"
         class="row items-center q-gutter-md q-mt-sm">
         <q-toggle v-if="lengths.length" v-model="showLength" dense label="Длина" />
         <q-toggle v-if="heights.length" v-model="showHeight" dense label="Высота" />
@@ -45,46 +42,117 @@
     </q-card-section>
     <q-card-section v-if="hasData" class="graphs-card__chart">
       <VueApexCharts class="graphs-chart" :key="chartKey" :type="chartType" :height="chartHeight"
-        :options="chartOptions" :series="series" />
+        :options="chartOptions" :series="series" @data-point-selection="onDataPointSelection" />
     </q-card-section>
     <q-card-section v-if="hasData" class="graphs-card__height">
       <div class="row items-center q-gutter-sm">
         <q-icon name="height" size="18px" />
         <q-slider v-model="chartHeight" :min="180" :max="900" :step="20" dense class="col" />
       </div>
+      <div v-if="showViolinWidth" class="row items-center q-gutter-sm q-mt-sm">
+        <q-icon name="open_in_full" size="18px" />
+        <span class="text-caption graphs-card__slider-label">Ширина violin</span>
+        <q-slider v-model="violinWidth" :min="0.2" :max="2" :step="0.1" dense class="col" />
+        <span class="text-caption graphs-card__slider-value">{{ violinWidth.toFixed(1) }}</span>
+      </div>
+      <div v-if="showJitter" class="row items-center q-gutter-sm q-mt-sm">
+        <q-icon name="scatter_plot" size="18px" />
+        <span class="text-caption graphs-card__slider-label">Разброс jitter</span>
+        <q-slider v-model="jitter" :min="0" :max="1" :step="0.05" dense class="col" />
+        <span class="text-caption graphs-card__slider-value">{{ jitter.toFixed(2) }}</span>
+      </div>
+      <div v-if="showHistogramBins" class="row items-center q-gutter-sm q-mt-sm">
+        <q-icon name="bar_chart" size="18px" />
+        <span class="text-caption graphs-card__slider-label">Количество bins</span>
+        <q-slider v-model="histogramBins" :min="5" :max="40" :step="1" dense class="col" />
+        <span class="text-caption graphs-card__slider-value">{{ histogramBins }}</span>
+      </div>
     </q-card-section>
     <q-card-section v-else class="text-body2 text-grey-7">
-      {{ records.length
-        ? "Включите хотя бы одну метрику для отображения."
-        : "Выберите записи в таблице результатов, чтобы построить график." }}
+      {{ emptyMessage }}
     </q-card-section>
   </q-card>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { useQuasar } from "quasar";
 import VueApexCharts from "vue3-apexcharts";
 import "apexcharts/violin";
 import { mergeRowsByRecordNo } from "@/scripts/resultsTable.js";
+import { normalizeGraphSettings } from "@/scripts/resultsGraphSettings.js";
 
 const props = defineProps({
   rows: { type: Object, required: true },
   selectedRecordNos: { type: Array, default: () => [] },
   focusedRecordNo: { type: Number, default: null },
+  settings: { type: Object, default: () => ({}) },
   fill: { type: Boolean, default: false },
-  windowMode: { type: Boolean, default: false },
 });
 
 const $q = useQuasar();
-const emit = defineEmits(["focus-record", "open-window", "close-window"]);
-const chartType = ref("violin");
-const orientation = ref("horizontal");
-const showLength = ref(true);
-const showHeight = ref(true);
-const showWidth = ref(true);
-const chartHeight = ref(320);
+const emit = defineEmits([
+  "focus-record",
+  "update:settings",
+]);
+
+const settingsModel = computed(() => normalizeGraphSettings(props.settings));
+
+const updateSetting = (key, value) => {
+  emit("update:settings", { ...settingsModel.value, [key]: value });
+};
+
+const chartType = computed({
+  get: () => settingsModel.value.chartType,
+  set: (value) => updateSetting("chartType", value),
+});
+const orientation = computed({
+  get: () => settingsModel.value.orientation,
+  set: (value) => updateSetting("orientation", value),
+});
+const showLength = computed({
+  get: () => settingsModel.value.showLength,
+  set: (value) => updateSetting("showLength", value),
+});
+const showHeight = computed({
+  get: () => settingsModel.value.showHeight,
+  set: (value) => updateSetting("showHeight", value),
+});
+const showWidth = computed({
+  get: () => settingsModel.value.showWidth,
+  set: (value) => updateSetting("showWidth", value),
+});
+const chartHeight = computed({
+  get: () => settingsModel.value.height,
+  set: (value) => updateSetting("height", value),
+});
+const violinWidth = computed({
+  get: () => settingsModel.value.violinWidth,
+  set: (value) => updateSetting("violinWidth", value),
+});
+const jitter = computed({
+  get: () => settingsModel.value.jitter,
+  set: (value) => updateSetting("jitter", value),
+});
+const histogramBins = computed({
+  get: () => settingsModel.value.histogramBins,
+  set: (value) => updateSetting("histogramBins", value),
+});
 const chartKey = computed(() => `${chartType.value}-${orientation.value}`);
+// Jitter рисуем собственными point annotations — так работают клики
+// по отдельным точкам. true временно включает встроенный jitter ApexCharts.
+const USE_NATIVE_JITTER = false;
+const isScatter = computed(() => chartType.value === "scatter");
+const isHistogram = computed(() => chartType.value === "histogram");
+const showOrientation = computed(
+  () => chartType.value === "violin" || chartType.value === "boxPlot",
+);
+const showViolinWidth = computed(() => chartType.value === "violin");
+const showJitter = computed(
+  () => chartType.value === "violin" || chartType.value === "boxPlot",
+);
+const showHistogramBins = computed(() => chartType.value === "histogram");
+const jitterPixels = computed(() => jitter.value * 32);
 
 const allRows = computed(() => mergeRowsByRecordNo(props.rows));
 
@@ -98,22 +166,21 @@ const toPositiveNumber = (value) => {
   return Number.isFinite(number) && number > 0 ? Math.round(number) : null;
 };
 
+const recordLength = (row) =>
+  toPositiveNumber(row.length) ?? toPositiveNumber(row.length_dorsal);
+const recordHeight = (row) => toPositiveNumber(row.height);
+const recordWidth = (row) => toPositiveNumber(row.width);
+
 const lengths = computed(() =>
-  records.value
-    .map((row) => toPositiveNumber(row.length) ?? toPositiveNumber(row.length_dorsal))
-    .filter((value) => value !== null),
+  records.value.map(recordLength).filter((value) => value !== null),
 );
 
 const heights = computed(() =>
-  records.value
-    .map((row) => toPositiveNumber(row.height))
-    .filter((value) => value !== null),
+  records.value.map(recordHeight).filter((value) => value !== null),
 );
 
 const widths = computed(() =>
-  records.value
-    .map((row) => toPositiveNumber(row.width))
-    .filter((value) => value !== null),
+  records.value.map(recordWidth).filter((value) => value !== null),
 );
 
 // Подсвечиваем запись, выбранную кликом по строке таблицы
@@ -125,19 +192,19 @@ const highlightedRecord = computed(() => {
 const highlightedLength = computed(() => {
   const row = highlightedRecord.value;
   if (!row) return null;
-  return toPositiveNumber(row.length) ?? toPositiveNumber(row.length_dorsal);
+  return recordLength(row);
 });
 
 const highlightedHeight = computed(() => {
   const row = highlightedRecord.value;
   if (!row) return null;
-  return toPositiveNumber(row.height);
+  return recordHeight(row);
 });
 
 const highlightedWidth = computed(() => {
   const row = highlightedRecord.value;
   if (!row) return null;
-  return toPositiveNumber(row.width);
+  return recordWidth(row);
 });
 
 const sideLabel = computed(() => {
@@ -171,7 +238,51 @@ const distributions = computed(() => {
   return result;
 });
 
-const hasData = computed(() => distributions.value.length > 0);
+const hasData = computed(() =>
+  isScatter.value
+    ? records.value.some(
+      (row) => recordLength(row) !== null && recordHeight(row) !== null,
+    )
+    : distributions.value.length > 0,
+);
+
+const emptyMessage = computed(() => {
+  if (!records.value.length) {
+    return "Выберите записи в таблице результатов, чтобы построить график.";
+  }
+  if (isScatter.value) {
+    return "Для scatter-графика у выбранных записей должны быть длина и высота.";
+  }
+  return "Включите хотя бы одну метрику для отображения.";
+});
+
+// Scatter строится по парам «длина — высота». Запись, подсвеченная в таблице,
+// показывается даже если не входит в набор выбранных записей.
+const scatterPoints = computed(() => {
+  const selected = new Set(props.selectedRecordNos);
+  const rows = records.value.slice();
+  if (props.focusedRecordNo != null && !selected.has(props.focusedRecordNo)) {
+    const row = allRows.value.find(
+      (item) => item.record_no === props.focusedRecordNo,
+    );
+    if (row) rows.push(row);
+  }
+
+  return rows
+    .map((row) => {
+      const x = recordLength(row);
+      const y = recordHeight(row);
+      if (x === null || y === null) return null;
+      return {
+        x,
+        y,
+        width: recordWidth(row),
+        row,
+        isFocused: row.record_no === props.focusedRecordNo,
+      };
+    })
+    .filter(Boolean);
+});
 
 // Встроенные точки violin не дают событий клика, поэтому рисуем
 // наблюдения как point annotations — у них есть собственный click.
@@ -180,10 +291,10 @@ const pointAnnotations = computed(() => {
   const hasHeight = distributions.value.some((item) => item.x === "Высота");
   const hasWidth = distributions.value.some((item) => item.x === "Ширина");
   const isHorizontal = orientation.value === "horizontal";
-  const jitter = (recordNo, metricIndex) => {
+  const jitterOffset = (recordNo, metricIndex) => {
     const seed = Number(recordNo) * 37 + metricIndex * 101;
     const value = Math.sin(seed) * 10000;
-    return (value - Math.floor(value) - 0.5) * 16;
+    return (value - Math.floor(value) - 0.5) * jitterPixels.value;
   };
 
   const annotationsFor = (row, isFocused) => {
@@ -196,7 +307,7 @@ const pointAnnotations = computed(() => {
           : category === "Высота"
             ? "#2e7d32"
             : "#7b1fa2";
-      const offset = isFocused ? 0 : jitter(row.record_no, metricIndex);
+      const offset = isFocused ? 0 : jitterOffset(row.record_no, metricIndex);
       points.push({
         ...(isHorizontal
           ? { x: value, y: category }
@@ -259,12 +370,42 @@ const pointAnnotations = computed(() => {
   return { points };
 });
 
-const series = computed(() => [
+const histogramSeries = computed(() =>
+  distributions.value.map((item) => ({
+    name: item.x,
+    data: [...item.points],
+  })),
+);
+
+const scatterSeries = computed(() => [
   {
-    name: "Значения",
-    data: distributions.value,
+    name: "Записи",
+    data: scatterPoints.value.map((point) => ({
+      x: point.x,
+      y: point.y,
+      fillColor: point.isFocused ? "#ff8f00" : "#1976d2",
+      strokeColor: "#ffffff",
+      meta: { record_no: point.row.record_no },
+    })),
   },
 ]);
+
+const series = computed(() => {
+  if (isScatter.value) return scatterSeries.value;
+  if (isHistogram.value) return histogramSeries.value;
+  return [
+    {
+      name: "Значения",
+      data: distributions.value,
+    },
+  ];
+});
+
+const onDataPointSelection = (event, chartContext, config) => {
+  if (!isScatter.value) return;
+  const point = scatterPoints.value[config?.dataPointIndex];
+  if (point) emit("focus-record", point.row.record_no);
+};
 
 const roundChartValue = (value) => {
   if (Array.isArray(value)) {
@@ -278,8 +419,22 @@ const roundChartValue = (value) => {
 
 const axisLabelFormatter = (value) => {
   const number = Number(value);
-  return Number.isFinite(number) ? Math.round(number) : value;
+  if (!Number.isFinite(number)) return value;
+  return Number.isInteger(number) ? number.toString() : number.toFixed(1);
 };
+
+const escapeHtml = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (char) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[char],
+  );
 
 const tooltipCustom = ({ dataPointIndex }) => {
   const item = distributions.value[dataPointIndex];
@@ -296,10 +451,47 @@ const tooltipCustom = ({ dataPointIndex }) => {
   `;
 };
 
+const scatterTooltip = ({ dataPointIndex }) => {
+  const point = scatterPoints.value[dataPointIndex];
+  if (!point) return "";
+  const row = point.row;
+  return `
+    <div style="padding: 6px 10px; font-size: 12px; line-height: 1.5;">
+      <div style="font-weight: 600; margin-bottom: 4px;">Запись № ${row.record_no}</div>
+      <div>Метка: <strong>${escapeHtml(row.label || "без метки")}</strong></div>
+      <div>Длина: <strong>${point.x}</strong></div>
+      <div>Высота: <strong>${point.y}</strong></div>
+      ${point.width !== null ? `<div>Ширина: <strong>${point.width}</strong></div>` : ""}
+      ${row.filename ? `<div style="color: #757575;">Файл: ${escapeHtml(row.filename)}</div>` : ""}
+    </div>
+  `;
+};
+
+const histogramTooltip = ({ series: chartSeries, seriesIndex, dataPointIndex, w }) => {
+  const item = histogramSeries.value[seriesIndex];
+  if (!item) return "";
+  const edges = w?.histogramData?.edges;
+  const from = edges?.[dataPointIndex];
+  const to = edges?.[dataPointIndex + 1];
+  const raw = chartSeries?.[seriesIndex]?.[dataPointIndex];
+  const count = Array.isArray(raw) ? raw[1] : raw && typeof raw === "object" ? raw.y : raw;
+  const range =
+    Number.isFinite(Number(from)) && Number.isFinite(Number(to))
+      ? `${axisLabelFormatter(from)}–${axisLabelFormatter(to)}`
+      : "";
+  return `
+    <div style="padding: 6px 10px; font-size: 12px; line-height: 1.5;">
+      <div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(item.name)}</div>
+      ${range ? `<div>Интервал: <strong>${range}</strong></div>` : ""}
+      <div>Количество: <strong>${Number.isFinite(Number(count)) ? axisLabelFormatter(count) : "—"}</strong></div>
+    </div>
+  `;
+};
+
 const chartOptions = computed(() => {
   const isViolin = chartType.value === "violin";
   const isHorizontal = orientation.value === "horizontal";
-  return {
+  const baseOptions = {
     chart: {
       type: chartType.value,
       toolbar: { show: false },
@@ -313,13 +505,86 @@ const chartOptions = computed(() => {
       mode: $q.dark.isActive ? "dark" : "light",
     },
     colors: ["#1976d2", "#2e7d32", "#7b1fa2"],
-    annotations: pointAnnotations.value,
     dataLabels: { enabled: false },
     legend: { show: false },
     stroke: { width: 1 },
     grid: {
       borderColor: $q.dark.isActive ? "#424242" : "#e0e0e0",
     },
+  };
+
+  if (isScatter.value) {
+    return {
+      ...baseOptions,
+      chart: {
+        ...baseOptions.chart,
+        zoom: { enabled: false },
+      },
+      markers: {
+        size: 5,
+        strokeWidth: 1,
+        hover: { size: 7 },
+      },
+      xaxis: {
+        type: "numeric",
+        title: { text: "Длина" },
+        labels: { formatter: axisLabelFormatter },
+      },
+      yaxis: {
+        title: { text: "Высота" },
+        labels: { formatter: axisLabelFormatter },
+      },
+      tooltip: {
+        custom: scatterTooltip,
+        y: {
+          formatter: roundChartValue,
+        },
+      },
+    };
+  }
+
+  if (isHistogram.value) {
+    return {
+      ...baseOptions,
+      legend: {
+        show: histogramSeries.value.length > 1,
+        position: "top",
+        horizontalAlign: "left",
+      },
+      plotOptions: {
+        bar: {
+          horizontal: false,
+          distributed: false,
+        },
+        histogram: {
+          bins: histogramBins.value,
+          normalize: "count",
+          overlap: false,
+        },
+      },
+      xaxis: {
+        type: "numeric",
+        title: { text: "Значение" },
+        labels: { formatter: axisLabelFormatter },
+      },
+      yaxis: {
+        title: { text: "Количество" },
+        labels: { formatter: axisLabelFormatter },
+      },
+      tooltip: {
+        custom: histogramTooltip,
+        y: {
+          formatter: roundChartValue,
+        },
+      },
+    };
+  }
+
+  return {
+    ...baseOptions,
+    annotations: USE_NATIVE_JITTER
+      ? { points: [] }
+      : pointAnnotations.value,
     ...(isHorizontal
       ? { xaxis: { labels: { formatter: axisLabelFormatter } } }
       : { yaxis: { labels: { formatter: axisLabelFormatter } } }),
@@ -332,15 +597,21 @@ const chartOptions = computed(() => {
         ? {
           violin: {
             normalize: "group",
+            bandwidthScale: violinWidth.value,
             points: {
-              show: false,
+              show: USE_NATIVE_JITTER,
+              jitter: jitter.value,
+              constrainToViolin: true,
             },
           },
         }
         : {
           boxPlot: {
             whiskers: "minmax",
-            points: { show: false },
+            points: {
+              show: USE_NATIVE_JITTER,
+              jitter: jitter.value,
+            },
             colors: {
               upper: "#1976d2",
               lower: "#2e7d32",
@@ -387,6 +658,15 @@ const chartOptions = computed(() => {
 .graphs-card__height {
   padding-top: 0;
   padding-bottom: 8px;
+}
+
+.graphs-card__slider-label {
+  min-width: 92px;
+}
+
+.graphs-card__slider-value {
+  min-width: 34px;
+  text-align: right;
 }
 
 .graphs-record-card {

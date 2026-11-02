@@ -43,8 +43,8 @@
     <div v-show="!canvasHidden" class="row q-ma-md canvas-row">
       <div id="canvas" ref="canvasRef"></div>
       <q-btn class="canvas-fab" round unelevated color="primary" icon="add_box" :disable="!activeFrameHidden"
-        title="Создать рамку" aria-label="Создать рамку" @click="createActiveFrame">
-        <q-tooltip>Новый фрейм</q-tooltip>
+        title="Создать рамку" aria-label="Создать рамку" @click="createActiveFrame()">
+        <q-tooltip>Новый фрейм (Ctrl+F)</q-tooltip>
       </q-btn>
     </div>
     <div class="row q-ma-md q-gutter-sm flex items-center">
@@ -64,6 +64,11 @@
         class="q-mr-sm" />
       <q-btn v-show="rows.lateral.length > 0 || rows.dorsal.length > 0" color="brown" icon-right="archive"
         label="Экспорт в CSV" no-caps @click="exportCombinedTable" />
+      <!-- TEMP: кнопка нагрузочного теста. Удалить вместе с generateLoadTestData. -->
+      <q-btn v-if="isDev" color="deep-orange" icon="science" label="TEMP: 50 записей" no-caps
+        @click="confirmLoadTestData">
+        <q-tooltip>Временная генерация 50 рамок и записей для нагрузочного теста</q-tooltip>
+      </q-btn>
       <q-btn v-show="rows.lateral.length > 0 || rows.dorsal.length > 0" :color="showTables ? 'secondary' : 'primary'"
         :icon="showTables ? 'visibility_off' : 'visibility'" :label="showTables ? 'Скрыть' : 'Показать результаты'"
         no-caps class="q-ml-auto" @click="showTables = !showTables">
@@ -76,20 +81,15 @@
       v-model:descriptions="generatedDescriptions" v-model:selected-description-id="selectedDescriptionId"
       v-model:show-description="showDescription" @focus-record="focusedRecordNo = $event"
       @edit-record="activateRecord" @delete-record="confirmDeleteRecord" />
-    <q-dialog v-model="showGraphsWindow" transition-show="scale" transition-hide="scale">
-      <div ref="graphWindowRef" class="graph-window">
-        <ResultsGraphs fill window-mode :rows="rows" :selected-record-nos="selectedRecordNos"
-          :focused-record-no="focusedRecordNo" @focus-record="focusedRecordNo = $event"
-          @close-window="showGraphsWindow = false" />
-        <div class="graph-window__resize-handle" @pointerdown="startGraphResize"></div>
-      </div>
-    </q-dialog>
   </q-page>
 </template>
 <script setup>
 import { useQuasar } from "quasar";
 
 const $q = useQuasar();
+
+// TEMP: флаг для временной кнопки нагрузочного теста.
+const isDev = import.meta.env.DEV;
 
 const rows = ref({
   lateral: [],
@@ -100,7 +100,7 @@ const showTables = ref(false);
 // Видимость текстового описания (правая половина нижней панели)
 const showDescription = ref(true);
 
-import { watch, inject, nextTick, defineAsyncComponent } from "vue";
+import { watch, inject, nextTick } from "vue";
 import "@svgdotjs/svg.draggable.js";
 import { Matrix, Point } from "@svgdotjs/svg.js";
 import { onMounted, onBeforeUnmount, ref } from "vue";
@@ -118,12 +118,8 @@ import { initGuides, resizeGuides } from "@/scripts/guides.js";
 import { initMagnifier } from "@/scripts/magnifier.js";
 import { exportCombinedTable as exportResultsCsv } from "@/scripts/resultsCsv.js";
 import ResultsPanel from "@/components/results/ResultsPanel.vue";
-const ResultsGraphs = defineAsyncComponent(
-  () => import("@/components/results/ResultsGraphs.vue"),
-);
 
 const canvasRef = ref();
-const graphWindowRef = ref(null);
 // let imagepath = ref('/src/assets/ost1.jpg')
 const imagefile = ref(null);
 // let draggableMainImage = ref(true)
@@ -174,8 +170,10 @@ const selectedDescriptionId = ref(null);
 const activeFrameHidden = ref(false);
 // Холст можно скрыть, чтобы освободить место для таблицы и описания
 const canvasHidden = ref(false);
-// Отдельное окно с графиками
-const showGraphsWindow = ref(false);
+// Общие параметры графиков для sidebar
+const graphSettings = ref(normalizeGraphSettings());
+// Ширина sidebar (приходит из MainLayout)
+const sidebarWidth = ref(300);
 
 // Передаём данные графиков в sidebar (MainLayout)
 const emitGraphsState = () => {
@@ -183,18 +181,27 @@ const emitGraphsState = () => {
     rows: rows.value,
     selectedRecordNos: [...selectedRecordNos.value],
     focusedRecordNo: focusedRecordNo.value,
+    graphSettings: { ...graphSettings.value },
   });
 };
-watch([rows, selectedRecordNos, focusedRecordNo], emitGraphsState, {
-  deep: true,
-  immediate: true,
-});
+watch(
+  [rows, selectedRecordNos, focusedRecordNo, graphSettings],
+  emitGraphsState,
+  {
+    deep: true,
+    immediate: true,
+  },
+);
 
 bus.on("graphs-focus-record", (recordNo) => {
   focusedRecordNo.value = recordNo;
 });
-bus.on("open-graphs-window", () => {
-  showGraphsWindow.value = true;
+bus.on("graph-settings-changed", (settings) => {
+  graphSettings.value = normalizeGraphSettings(settings);
+});
+bus.on("sidebar-width-changed", (width) => {
+  const number = Number(width);
+  if (Number.isFinite(number)) sidebarWidth.value = number;
 });
 
 // Поиск индекса строки в массиве rows по номеру записи
@@ -315,7 +322,7 @@ const resetFrameLocks = () => {
   bus.emit("pin-image-toggled", { frame: "dorsal", value: false });
 };
 
-const createActiveFrame = () => {
+const createActiveFrame = (point = null) => {
   if (!activeFrameHidden.value) return;
   if (!om.value.lateral_side && !om.value.dorsal_side) {
     $q.notify({
@@ -327,6 +334,91 @@ const createActiveFrame = () => {
   }
   resetFrameLocks();
   showActiveFrame();
+  if (point) centerActiveFramesAt(point);
+};
+
+// Центр новой рамки — в точке холста point. Если рамок две (латеральная и
+// дорсальная), вторая смещается, чтобы рамки не накладывались друг на друга.
+const centerActiveFramesAt = (point) => {
+  const sets = [];
+  if (om.value.lateral_side) {
+    sets.push(om.value.concave_vs ? concave_lso : lso);
+  }
+  if (om.value.dorsal_side) sets.push(dso);
+  sets.forEach((obj, index) => {
+    if (!obj || !obj.baseFrame || !obj.mobjects) return;
+    const bf = obj.baseFrame.attr(["x", "y", "width", "height"]);
+    const localCenter = new Point(
+      Number(bf.x) + Number(bf.width) / 2,
+      Number(bf.y) + Number(bf.height) / 2,
+    );
+    // текущий центр рамки в координатах холста
+    const center = localCenter.transform(obj.mobjects.matrixify());
+    const targetX = point.x + index * 24;
+    const targetY = point.y + index * 24;
+    moveGroupByScreenDelta(
+      obj.mobjects,
+      targetX - center.x,
+      targetY - center.y,
+    );
+  });
+  bus.emit("overlays-transformed");
+};
+
+// Позиция курсора в координатах холста. null — если курсор вне холста.
+const canvasPointFromClient = (clientX, clientY) => {
+  const el = canvasRef.value;
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  if (
+    clientX < rect.left ||
+    clientX > rect.right ||
+    clientY < rect.top ||
+    clientY > rect.bottom
+  ) {
+    return null;
+  }
+  const ctm = draw.node.getScreenCTM();
+  if (!ctm) return null;
+  const p = new Point(clientX, clientY).transform(new Matrix(ctm).inverse());
+  return Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
+};
+
+// Последняя известная позиция курсора: у события клавиатуры clientX/clientY
+// может не быть, если мышь ещё не двигали.
+let lastPointerClient = null;
+const trackPointer = (event) => {
+  lastPointerClient = { x: event.clientX, y: event.clientY };
+};
+
+// Ctrl+F — то же, что кнопка «Новый фрейм». Работает только когда кнопка
+// активна (рамка скрыта после сохранения записи) и фокус не в поле ввода.
+const onGlobalKeydown = (event) => {
+  if (event.code !== "KeyF") return;
+  if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+  const target = event.target;
+  if (
+    target &&
+    target !== window &&
+    (target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT" ||
+      target.isContentEditable)
+  ) {
+    return;
+  }
+  if (!activeFrameHidden.value) return;
+  if (canvasHidden.value) return;
+  event.preventDefault();
+  const pointer =
+    lastPointerClient ??
+    (event.clientX || event.clientY
+      ? { x: event.clientX, y: event.clientY }
+      : null);
+  const point = pointer
+    ? canvasPointFromClient(pointer.x, pointer.y)
+    : null;
+  createActiveFrame(point);
 };
 
 // Любое внешнее отображение рамки (таблица, чекбоксы) снова делает её активной
@@ -706,6 +798,7 @@ watch(
 // Кнопка "tune" в шапке меняет множители; здесь пересчитываем размеры
 // с компенсацией текущего масштаба групп.
 import { syncGroupStyle } from "@/scripts/geostyle.js";
+import { normalizeGraphSettings } from "@/scripts/resultsGraphSettings.js";
 
 // Подгонка размеров SVG под контейнер: канвас растягивается на всё
 // свободное место (ширина и высота), оставшееся от панелей и таблиц.
@@ -726,60 +819,6 @@ const toggleCanvas = () => {
     nextTick(() => requestAnimationFrame(sizeCanvasToContainer));
   }
 };
-
-// Ручное изменение размеров окна графиков (CSS resize в q-dialog
-// растягивал только высоту, поэтому используем pointer-события).
-let graphResizeState = null;
-
-const onGraphResize = (event) => {
-  const el = graphWindowRef.value;
-  if (!graphResizeState || !el) return;
-  const width = Math.min(
-    window.innerWidth * 0.95,
-    Math.max(420, graphResizeState.width + event.clientX - graphResizeState.x),
-  );
-  const height = Math.min(
-    window.innerHeight * 0.9,
-    Math.max(320, graphResizeState.height + event.clientY - graphResizeState.y),
-  );
-  el.style.width = `${width}px`;
-  el.style.height = `${height}px`;
-};
-
-const stopGraphResize = () => {
-  graphResizeState = null;
-  document.body.style.userSelect = "";
-  window.removeEventListener("pointermove", onGraphResize);
-  window.removeEventListener("pointerup", stopGraphResize);
-};
-
-const startGraphResize = (event) => {
-  const el = graphWindowRef.value;
-  if (!el) return;
-  event.preventDefault();
-  const rect = el.getBoundingClientRect();
-  graphResizeState = {
-    x: event.clientX,
-    y: event.clientY,
-    width: rect.width,
-    height: rect.height,
-  };
-  document.body.style.userSelect = "none";
-  window.addEventListener("pointermove", onGraphResize);
-  window.addEventListener("pointerup", stopGraphResize);
-};
-
-onBeforeUnmount(stopGraphResize);
-
-// Если в наборе для описания осталась одна запись, окно графиков закрываем
-watch(
-  () => selectedRecordNos.value.length,
-  (count) => {
-    if (count <= 1) {
-      showGraphsWindow.value = false;
-    }
-  },
-);
 
 // Привести размеры точек/линий всех наборов к текущим множителям
 // и текущему масштабу групп (чтобы при зуме с замком они не росли).
@@ -802,6 +841,8 @@ onMounted(() => {
   // draw = initSVG(canvasRef.value)
   draw.addTo(canvasRef.value);
   canvasRef.value.addEventListener("wheel", onWheelZoom, { passive: false });
+  window.addEventListener("keydown", onGlobalKeydown);
+  window.addEventListener("pointermove", trackPointer, { passive: true });
   sizeCanvasToContainer();
   // Канвас занимает всю доступную ширину; при изменении размеров
   // контейнера (окно, drawer, dock) SVG подстраивается автоматически.
@@ -834,6 +875,8 @@ onBeforeUnmount(() => {
   if (canvasRef.value) {
     canvasRef.value.removeEventListener("wheel", onWheelZoom);
   }
+  window.removeEventListener("keydown", onGlobalKeydown);
+  window.removeEventListener("pointermove", trackPointer);
   if (canvasResizeObserver) {
     canvasResizeObserver.disconnect();
     canvasResizeObserver = null;
@@ -1011,6 +1054,182 @@ const addRecord = () => {
   // Новая рамка сразу не появляется — её можно создать кнопкой на панели
   hideActiveFrame();
 };
+
+// ============================================================================
+// TEMP: нагрузочный тест графиков.
+// Создаёт 50 рамок/записей с длиной 400–600 и высотой = длина / 1.5.
+// Длина (и размеры рамок) идёт по усечённому нормальному распределению.
+// Остальные измерения заполняются нулями (по умолчанию).
+// Удалить этот блок, флаг isDev и кнопку "TEMP: 50 записей" после проверки.
+// ============================================================================
+const LOAD_TEST_RECORD_COUNT = 50;
+
+// Усечённое нормальное распределение: среднее — середина диапазона,
+// сигма — шестая часть диапазона (в границы попадает ~99.7% значений).
+const loadTestNormalValue = (min, max) => {
+  const mean = (min + max) / 2;
+  const sigma = (max - min) / 6;
+  for (;;) {
+    const u1 = 1 - Math.random();
+    const u2 = Math.random();
+    const value =
+      mean +
+      sigma * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    if (value >= min && value <= max) return Math.round(value);
+  }
+};
+
+const loadTestZeroMeasure = () => ({
+  alfa: 0,
+  hc: 0,
+  vc: 0,
+  ln: 0,
+  sln: 0,
+});
+
+const buildLoadTestRows = (recordNo, length, height) => {
+  const base = {
+    record_no: recordNo,
+    label: `Нагрузка ${recordNo}`,
+    filename: om.value.filename || "load-test",
+  };
+  const lateral = lateralRowValues({
+    side: "left",
+    length,
+    height,
+    ad: loadTestZeroMeasure(),
+    pd: loadTestZeroMeasure(),
+    av: loadTestZeroMeasure(),
+    pv: loadTestZeroMeasure(),
+    v: { lv: 0, lvl: 0, dv: 0 },
+  });
+  const dorsal = dorsalRowValues({
+    fullness: "full",
+    length_dorsal: 0,
+    width: 0,
+    al: loadTestZeroMeasure(),
+    pl: loadTestZeroMeasure(),
+    ar: loadTestZeroMeasure(),
+    pr: loadTestZeroMeasure(),
+  });
+  return {
+    lateral: { ...base, ...lateral },
+    dorsal: { ...base, ...dorsal },
+  };
+};
+
+const generateLoadTestData = () => {
+  const count = LOAD_TEST_RECORD_COUNT;
+  const existingNumbers = [
+    Number(om.value.record_no) || 0,
+    ...rows.value.lateral.map((row) => Number(row.record_no) || 0),
+    ...rows.value.dorsal.map((row) => Number(row.record_no) || 0),
+    ...recordFrames.keys(),
+  ];
+  const nextRecordNo = Math.max(0, ...existingNumbers) + 1;
+
+  // Берём видимый набор, иначе замороженные копии унаследуют display:none.
+  let frameKey = null;
+  let frameObject = null;
+  if (om.value.lateral_side) {
+    frameKey = om.value.concave_vs ? "concave" : "left";
+    frameObject = om.value.concave_vs ? concave_lso : lso;
+  } else if (om.value.dorsal_side) {
+    frameKey = "dorsal";
+    frameObject = dso;
+  }
+
+  const wasHidden = activeFrameHidden.value;
+  if (wasHidden && frameObject) frameObject.mobjects.show();
+  const template = frameObject ? captureSet(frameObject) : null;
+  const templateUI = captureUI();
+  const templateLength =
+    Number(om.value.length) > 0
+      ? Number(om.value.length)
+      : Number(frameObject?.baseFrame?.attr("width")) || 1;
+  const templateHeight =
+    Number(om.value.height) > 0
+      ? Number(om.value.height)
+      : Number(frameObject?.baseFrame?.attr("height")) || 1;
+
+  const createdRecordNos = [];
+  const newLateralRows = [];
+  const newDorsalRows = [];
+
+  for (let i = 0; i < count; i += 1) {
+    const recordNo = nextRecordNo + i;
+    const length = loadTestNormalValue(400, 600);
+    const height = Math.round(length / 1.5);
+    const { lateral, dorsal } = buildLoadTestRows(recordNo, length, height);
+    newLateralRows.push(lateral);
+    newDorsalRows.push(dorsal);
+    createdRecordNos.push(recordNo);
+
+    if (template) {
+      // Раскладываем рамки сеткой и масштабируем каждую под своё значение,
+      // чтобы и размеры рамок на холсте шли по нормальному распределению.
+      const dx = (i % 5) * 80;
+      const dy = Math.floor(i / 5) * 80;
+      const scaleX = length / templateLength;
+      const scaleY = height / templateHeight;
+      const matrix = new Matrix()
+        .translate(dx, dy)
+        .multiply(new Matrix(...template.transform))
+        .multiply(new Matrix().scale(scaleX, scaleY));
+      recordFrames.set(recordNo, {
+        [frameKey]: {
+          ...template,
+          transform: [
+            matrix.a,
+            matrix.b,
+            matrix.c,
+            matrix.d,
+            matrix.e,
+            matrix.f,
+          ],
+        },
+        ui: { ...templateUI, label: `Нагрузка ${recordNo}` },
+      });
+    }
+  }
+
+  rows.value = {
+    lateral: [...rows.value.lateral, ...newLateralRows],
+    dorsal: [...rows.value.dorsal, ...newDorsalRows],
+  };
+  om.value.record_no = createdRecordNos[createdRecordNos.length - 1];
+
+  if (template) {
+    createdRecordNos.forEach((recordNo) => freezeRecord(recordNo));
+    refreshFrozenTransforms();
+  }
+
+  selectedRecordNos.value = createdRecordNos;
+  focusedRecordNo.value = null;
+  showTables.value = true;
+  // Оставляем на холсте только 50 замороженных копий.
+  hideActiveFrame();
+
+  $q.notify({
+    message: `Создано ${count} тестовых записей`,
+    color: "positive",
+    icon: "science",
+  });
+};
+
+const confirmLoadTestData = () => {
+  $q.dialog({
+    title: "Нагрузочный тест",
+    message: `Добавить ${LOAD_TEST_RECORD_COUNT} тестовых рамок и записей?`,
+    cancel: { label: "Отмена", flat: true, color: "grey" },
+    ok: { label: "Создать", color: "deep-orange", unelevated: true },
+    persistent: true,
+    focus: "cancel",
+  }).onOk(generateLoadTestData);
+};
+// ============================================================================
+// /TEMP
+// ============================================================================
 
 // Кнопка «+» или «save» на рамке — создаёт новую запись или обновляет активную
 const handleRecordAction = () => {
@@ -1596,6 +1815,8 @@ const buildProjectData = () => {
     ui: {
       showTables: showTables.value,
       showDescription: showDescription.value,
+      sidebarWidth: sidebarWidth.value,
+      graphSettings: clonePlain(graphSettings.value),
     },
   };
 };
@@ -1813,6 +2034,16 @@ const restoreProject = async (project, filePath) => {
   }
   showTables.value = Boolean(project.ui?.showTables);
   showDescription.value = project.ui?.showDescription !== false;
+  if (project.ui?.sidebarWidth != null) {
+    const savedWidth = Number(project.ui.sidebarWidth);
+    if (Number.isFinite(savedWidth)) {
+      sidebarWidth.value = savedWidth;
+      bus.emit("sidebar-width-set", savedWidth);
+    }
+  }
+  if (project.ui?.graphSettings) {
+    graphSettings.value = normalizeGraphSettings(project.ui.graphSettings);
+  }
 
   // геометрия текущей (активной) рамки
   const active = project.activeFrame || {};
@@ -2002,46 +2233,5 @@ image {
   top: 12px;
   left: 12px;
   z-index: 2;
-}
-
-/* Отдельное окно графиков: размеры меняются за правый нижний угол */
-.graph-window {
-  position: relative;
-  width: 80vw;
-  height: 80vh;
-  min-width: 420px;
-  min-height: 320px;
-  max-width: 95vw;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.graph-window > .graphs-card {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-}
-
-.graph-window__resize-handle {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
-  width: 18px;
-  height: 18px;
-  cursor: nwse-resize;
-}
-
-.graph-window__resize-handle::after {
-  content: "";
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid #888;
-  border-bottom: 2px solid #888;
 }
 </style>

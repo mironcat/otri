@@ -77,8 +77,8 @@
             </q-tab-panel>
             <q-tab-panel name="graphs" class="q-pa-none sidebar-panel sidebar-graph-panel">
               <ResultsGraphs :rows="graphRows" :selected-record-nos="graphSelectedRecordNos"
-                :focused-record-no="graphFocusedRecordNo" fill @focus-record="onGraphFocus"
-                @open-window="bus.emit('open-graphs-window')" />
+                :focused-record-no="graphFocusedRecordNo" :settings="graphSettings" fill
+                @focus-record="onGraphFocus" @update:settings="onGraphSettingsUpdate" />
             </q-tab-panel>
           </q-tab-panels>
         </div>
@@ -118,6 +118,7 @@ import {
 } from "../scripts/geostyle";
 import { APP_VERSION } from "../config/version";
 import { toggleTheme } from "../scripts/theme";
+import { normalizeGraphSettings } from "../scripts/resultsGraphSettings";
 const version = APP_VERSION;
 const $q = useQuasar();
 // В тёмной теме поля в шапке не должны оставаться белыми
@@ -190,6 +191,7 @@ const stopDrawerResize = () => {
   window.removeEventListener("pointerup", stopDrawerResize);
   window.removeEventListener("pointercancel", stopDrawerResize);
   persistDrawerWidth();
+  broadcastSidebarWidth();
 };
 
 const startDrawerResize = (event) => {
@@ -206,6 +208,7 @@ const startDrawerResize = (event) => {
 const resetDrawerWidth = () => {
   drawerWidth.value = DRAWER_DEFAULT_WIDTH;
   persistDrawerWidth();
+  broadcastSidebarWidth();
 };
 
 onBeforeUnmount(stopDrawerResize);
@@ -225,6 +228,7 @@ onMounted(() => {
   onMagnifierChange((v) => {
     magnifierVisible.value = v;
   });
+  broadcastSidebarWidth();
 });
 
 // --- Управление размером точек и линий ---
@@ -234,10 +238,16 @@ const bus = inject("bus");
 const graphRows = ref({ lateral: [], dorsal: [] });
 const graphSelectedRecordNos = ref([]);
 const graphFocusedRecordNo = ref(null);
+const graphSettings = ref(normalizeGraphSettings());
 
 const onGraphFocus = (recordNo) => {
   graphFocusedRecordNo.value = recordNo;
   bus.emit("graphs-focus-record", recordNo);
+};
+
+const onGraphSettingsUpdate = (settings) => {
+  graphSettings.value = normalizeGraphSettings(settings);
+  bus.emit("graph-settings-changed", graphSettings.value);
 };
 
 const onGraphsState = (state) => {
@@ -245,9 +255,22 @@ const onGraphsState = (state) => {
   graphRows.value = state.rows || { lateral: [], dorsal: [] };
   graphSelectedRecordNos.value = state.selectedRecordNos || [];
   graphFocusedRecordNo.value = state.focusedRecordNo ?? null;
+  if (state.graphSettings) {
+    graphSettings.value = normalizeGraphSettings(state.graphSettings);
+  }
 };
 
 bus.on("graphs-state", onGraphsState);
+
+const applySidebarWidth = (width) => {
+  drawerWidth.value = clampDrawerWidth(width);
+  persistDrawerWidth();
+};
+bus.on("sidebar-width-set", applySidebarWidth);
+
+const broadcastSidebarWidth = () => {
+  bus.emit("sidebar-width-changed", drawerWidth.value);
+};
 
 watch(
   () => graphSelectedRecordNos.value.length,
@@ -265,6 +288,7 @@ watch(
 
 onBeforeUnmount(() => {
   bus.off("graphs-state", onGraphsState);
+  bus.off("sidebar-width-set", applySidebarWidth);
 });
 
 // Команды из меню Electron «Файл» пробрасываем в шину приложения,

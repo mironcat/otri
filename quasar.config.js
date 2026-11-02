@@ -195,7 +195,7 @@ export default defineConfig(function (/* ctx */) {
         nsis: {
           oneClick: true,
           perMachine: true,
-          artifactName: "Otri-Setup-${version}-${arch}.${ext}",
+          artifactName: "Otri-Windows-Setup-${version}-${arch}.${ext}",
           createDesktopShortcut: true,
           createStartMenuShortcut: true,
           shortcutName: "Otri",
