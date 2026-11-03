@@ -10,7 +10,20 @@
     <!-- Режим редактора: markdown-исходник + панель переменных.
          Ширина панели переменных меняется перетаскиванием разделителя. -->
     <div v-if="editorMode" ref="editorRootRef" class="description-editor">
-      <MarkdownEditor ref="editorRef" v-model="editorText" class="description-editor__code" />
+      <div class="description-editor__main">
+        <q-tabs v-model="editorTab" dense no-caps align="left" class="description-editor__tabs">
+          <q-tab name="markdown" icon="code" label="" />
+          <q-tab name="variables" icon="functions" label="" />
+        </q-tabs>
+        <q-tab-panels v-model="editorTab" keep-alive class="description-editor__panels">
+          <q-tab-panel name="markdown" class="description-editor__panel">
+            <MarkdownEditor ref="editorRef" v-model="editorText" class="description-editor__code" />
+          </q-tab-panel>
+          <q-tab-panel name="variables" class="description-editor__panel">
+            <CustomVariablesEditor />
+          </q-tab-panel>
+        </q-tab-panels>
+      </div>
       <div class="description-editor__resizer" role="separator" aria-orientation="vertical" tabindex="0"
         aria-label="Изменить ширину панели переменных" @pointerdown="startEditorResize"
         @keydown.left.prevent="nudgeEditorVars(-16)" @keydown.right.prevent="nudgeEditorVars(16)"></div>
@@ -28,8 +41,9 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import MarkdownEditor from "@/components/MarkdownEditor.vue";
+import CustomVariablesEditor from "@/components/CustomVariablesEditor.vue";
 import DescriptionVariablesPanel from "@/components/results/DescriptionVariablesPanel.vue";
 import {
   DESCRIPTION_VARIABLE_GROUPS,
@@ -60,6 +74,9 @@ const renderedHtml = computed(() =>
 const editorText = ref(markdownSource.value);
 
 const editorRef = ref(null);
+
+// Активная вкладка левой части редактора: markdown или редактор переменных.
+const editorTab = ref("markdown");
 
 // Ширина панели переменных (px). Меняется перетаскиванием разделителя.
 const EDITOR_VARS_MIN = 160;
@@ -103,8 +120,11 @@ const startEditorResize = (event) => {
 
 watch(editorText, (value) => emit("update:markdown", value));
 
-// Вставка плейсхолдера в позицию курсора.
-const insertToken = (token) => editorRef.value?.insertAtCursor(token);
+// Вставка плейсхолдера: показываем вкладку markdown и вставляем в позицию курсора.
+const insertToken = (token) => {
+  editorTab.value = "markdown";
+  nextTick(() => editorRef.value?.insertAtCursor(token));
+};
 </script>
 
 <style scoped>
@@ -141,8 +161,36 @@ const insertToken = (token) => editorRef.value?.insertAtCursor(token);
   min-height: 0;
 }
 
-.description-editor__code {
+/* Левая часть: вкладки Markdown / Переменные */
+.description-editor__main {
   flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.description-editor__tabs {
+  flex: 0 0 auto;
+}
+
+.description-editor__panels {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.description-editor__panels :deep(.q-panel) {
+  height: 100%;
+}
+
+.description-editor__panel {
+  height: 100%;
+  padding: 0;
+}
+
+.description-editor__code {
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
 }

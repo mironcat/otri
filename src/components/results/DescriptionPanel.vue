@@ -16,7 +16,7 @@
         <q-tooltip>{{ editorMode ? 'Вернуться к просмотру описания' : 'Редактировать описание в формате Markdown'
         }}</q-tooltip>
       </q-btn>
-      <q-btn size="sm" no-caps class="q-mr-sm" color="primary" icon="save" label="Сохранить шаблон"
+      <q-btn v-if="editorMode" size="sm" no-caps class="q-mr-sm" color="primary" icon="save" label="Сохранить шаблон"
         :disable="!description" @click="saveDescriptionTemplate">
         <q-tooltip>Сохранить текущий markdown как шаблон для новых описаний во всех будущих проектах</q-tooltip>
       </q-btn>

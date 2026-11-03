@@ -9,6 +9,7 @@
 // значения в текст и собирать исходный (дефолтный) markdown по измерениям.
 // Рендер markdown в HTML выполняется тем же стеком, что и в проекте
 // marktax: unified + remark-parse + remark-html.
+import { computed } from "vue";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkHtml from "remark-html";
@@ -20,6 +21,7 @@ import {
   getAlfaTypeofCurve,
   getOrientationTypeofCurve,
 } from "@/scripts/interpretation.js";
+import { customVariables } from "@/scripts/customVariables.js";
 
 // Форматирование чисел: те же правила, что в текстовом описании.
 const fmt = (value) => {
@@ -44,6 +46,68 @@ const degrees = (value) => {
 const getLength = (om) => (om?.length > 0 ? om.length : om?.length_dorsal || 0);
 const getHeight = (om) => (om?.height > 0 ? om.height : om?.width || 0);
 
+// --- Пользовательские (вторичные) переменные ---------------------------
+// Выражения выполняются в ограниченном контексте: измерения + помощники.
+const EXPRESSION_ARGS = [
+  "om",
+  "Math",
+  "fmt",
+  "ratio",
+  "degrees",
+  "getShellLengthType",
+  "getPlenateType",
+  "getDegreeOfElongation",
+  "getSLNTypeofCurve",
+  "getAlfaTypeofCurve",
+  "getOrientationTypeofCurve",
+];
+
+const EXPRESSION_VALUES = [
+  null,
+  Math,
+  fmt,
+  ratio,
+  degrees,
+  getShellLengthType,
+  getPlenateType,
+  getDegreeOfElongation,
+  getSLNTypeofCurve,
+  getAlfaTypeofCurve,
+  getOrientationTypeofCurve,
+];
+
+const expressionCache = new Map();
+
+function compileExpression(expression) {
+  if (expressionCache.has(expression)) return expressionCache.get(expression);
+  let fn;
+  try {
+    fn = new Function(
+      ...EXPRESSION_ARGS,
+      `"use strict"; return (${expression});`,
+    );
+  } catch {
+    fn = null;
+  }
+  expressionCache.set(expression, fn);
+  return fn;
+}
+
+function evaluateCustomExpression(variable, om) {
+  const fn = compileExpression(variable.expression || "");
+  if (!fn) return "";
+  try {
+    const args = EXPRESSION_VALUES.map((value, index) =>
+      index === 0 ? om : value,
+    );
+    const result = fn(...args);
+    if (typeof result === "number") return fmt(result);
+    return result == null ? "" : String(result);
+  } catch {
+    return "";
+  }
+}
+
 // Дуги боковой и дорсальной проекций.
 const ARCS = [
   { key: "ad", short: "AD", name: "Передне-спинная дуга", group: "Дуги (латеральные)" },
@@ -65,101 +129,143 @@ const COMMON_VARIABLES = [
   {
     token: "shellLengthType",
     label: "Тип длины раковины",
-    group: "Общие",
+    group: "Текстовые",
     resolve: (om) => getShellLengthType(getLength(om)),
   },
   {
     token: "elongation",
     label: "Степень удлинённости",
-    group: "Общие",
+    group: "Текстовые",
     resolve: (om) => getDegreeOfElongation(getLength(om), getHeight(om)),
   },
   {
     token: "plenateType",
     label: "Тип плетности",
-    group: "Общие",
+    group: "Текстовые",
     resolve: (om) => getPlenateType(om?.ad?.hc / om?.pd?.hc),
   },
   {
     token: "side",
     label: "Сторона",
-    group: "Общие",
+    group: "Текстовые",
     resolve: (om) => (om?.side === "right" ? "правая" : "левая"),
   },
   {
     token: "fullness",
     label: "Полнота",
-    group: "Общие",
+    group: "Текстовые",
     resolve: (om) => (om?.fullness === "half" ? "половина" : "полная"),
   },
   {
     token: "fmt(om.length)",
     label: "Длина (L)",
-    group: "Числа",
+    group: "Первичные",
     resolve: (om) => fmt(om?.length),
   },
   {
     token: "fmt(om.height)",
     label: "Высота (H)",
-    group: "Числа",
+    group: "Первичные",
     resolve: (om) => fmt(om?.height),
   },
   {
     token: "fmt(om.length_dorsal)",
     label: "Длина дорсальная (L)",
-    group: "Числа",
+    group: "Первичные",
     resolve: (om) => fmt(om?.length_dorsal),
   },
   {
     token: "fmt(om.width)",
     label: "Ширина (W)",
-    group: "Числа",
+    group: "Первичные",
     resolve: (om) => fmt(om?.width),
   },
   {
     token: "ratio(om.length, om.height)",
     label: "Отношение L/H",
-    group: "Числа",
+    group: "Числовые вторичные",
     resolve: (om) => ratio(om?.length, om?.height),
   },
   {
     token: "ratio(om.length_dorsal, om.width)",
     label: "Отношение L/W",
-    group: "Числа",
+    group: "Числовые вторичные",
     resolve: (om) => ratio(om?.length_dorsal, om?.width),
   },
   {
     token: "ratio(om.ad.hc, om.pd.hc)",
     label: "Отношение AD-l/PD-l",
-    group: "Числа",
+    group: "Числовые вторичные",
     resolve: (om) => ratio(om?.ad?.hc, om?.pd?.hc),
   },
   {
     token: "fmt(om.v.lv)",
     label: "Брюшной край lv",
-    group: "Брюшной край",
+    group: "Первичные",
     resolve: (om) => fmt(om?.v?.lv),
   },
   {
     token: "fmt(om.v.lvl)",
     label: "Брюшной край lvl",
-    group: "Брюшной край",
+    group: "Первичные",
     resolve: (om) => fmt(om?.v?.lvl),
   },
   {
     token: "fmt(om.v.dv)",
     label: "Брюшной край dv",
-    group: "Брюшной край",
+    group: "Первичные",
     resolve: (om) => fmt(om?.v?.dv),
   },
 ];
 
-// Переменные дуг: ориентация/крутизна/положение (строка) и числовые.
-const arcVariables = ARCS.flatMap(({ key, short, group }) => [
+// Переменные дуг: первичные замеры, вторичные отношения и текстовые типы.
+const arcVariables = ARCS.flatMap(({ key, short }) => [
+  {
+    token: `degrees(om.${key}.alfa)`,
+    label: `${short} — α`,
+    group: "Первичные",
+    resolve: (om) => degrees(om?.[key]?.alfa),
+  },
+  {
+    token: `fmt(om.${key}.hc)`,
+    label: `${short} — hc`,
+    group: "Первичные",
+    resolve: (om) => fmt(om?.[key]?.hc),
+  },
+  {
+    token: `fmt(om.${key}.vc)`,
+    label: `${short} — vc`,
+    group: "Первичные",
+    resolve: (om) => fmt(om?.[key]?.vc),
+  },
+  {
+    token: `fmt(om.${key}.ln)`,
+    label: `${short} — ln`,
+    group: "Первичные",
+    resolve: (om) => fmt(om?.[key]?.ln),
+  },
+  {
+    token: `fmt(om.${key}.sln)`,
+    label: `${short} — sln`,
+    group: "Первичные",
+    resolve: (om) => fmt(om?.[key]?.sln),
+  },
+  {
+    token: `ratio(om.${key}.vc, om.${key}.hc)`,
+    label: `${short} — h/l`,
+    group: "Числовые вторичные",
+    resolve: (om) => ratio(om?.[key]?.vc, om?.[key]?.hc),
+  },
+  {
+    token: `ratio(om.${key}.sln, om.${key}.ln)`,
+    label: `${short} — s/n`,
+    group: "Числовые вторичные",
+    resolve: (om) => ratio(om?.[key]?.sln, om?.[key]?.ln),
+  },
   {
     token: `${key}.orientation`,
     label: `${short} — ориентация`,
-    group,
+    group: "Текстовые",
     resolve: (om) => {
       const arc = om?.[key] || {};
       return arc.hc || arc.vc ? getOrientationTypeofCurve(arc) : "";
@@ -168,7 +274,7 @@ const arcVariables = ARCS.flatMap(({ key, short, group }) => [
   {
     token: `${key}.steepness`,
     label: `${short} — крутизна`,
-    group,
+    group: "Текстовые",
     resolve: (om) => {
       const arc = om?.[key] || {};
       return getSLNTypeofCurve(arc.ln ? arc.sln / arc.ln : NaN);
@@ -177,54 +283,81 @@ const arcVariables = ARCS.flatMap(({ key, short, group }) => [
   {
     token: `${key}.position`,
     label: `${short} — положение`,
-    group,
+    group: "Текстовые",
     resolve: (om) => getAlfaTypeofCurve(om?.[key]?.alfa),
-  },
-  {
-    token: `ratio(om.${key}.vc, om.${key}.hc)`,
-    label: `${short} — h/l`,
-    group,
-    resolve: (om) => ratio(om?.[key]?.vc, om?.[key]?.hc),
-  },
-  {
-    token: `ratio(om.${key}.sln, om.${key}.ln)`,
-    label: `${short} — s/n`,
-    group,
-    resolve: (om) => ratio(om?.[key]?.sln, om?.[key]?.ln),
-  },
-  {
-    token: `degrees(om.${key}.alfa)`,
-    label: `${short} — α`,
-    group,
-    resolve: (om) => degrees(om?.[key]?.alfa),
   },
 ]);
 
-// Плоский список всех доступных переменных.
+// Плоский список встроенных переменных.
 export const DESCRIPTION_VARIABLES = [...COMMON_VARIABLES, ...arcVariables];
 
+// Пользовательские переменные (из редактора переменных) в том же формате.
+const customVariableEntries = computed(() =>
+  customVariables.value
+    .filter((variable) => variable.token)
+    .map((variable) => ({
+      token: variable.token,
+      label: variable.label || variable.token,
+      group: variable.type === "text" ? "Текстовые" : "Числовые вторичные",
+      resolve: (om) => evaluateCustomExpression(variable, om),
+      custom: true,
+    })),
+);
+
+// Все переменные: встроенные + пользовательские.
+const allVariables = computed(() => [
+  ...DESCRIPTION_VARIABLES,
+  ...customVariableEntries.value,
+]);
+
 // Переменные, сгруппированные по разделам для панели подстановки.
-const GROUP_ORDER = [
+const GROUP_ORDER = ["Первичные", "Числовые вторичные", "Текстовые"];
+
+// Внутри «Первичных» — подгруппы по дугам; «Общие» — не привязанные к дуге.
+const PRIMARY_SUBGROUP_ORDER = [
   "Общие",
-  "Числа",
-  "Дуги (латеральные)",
-  "Брюшной край",
-  "Дуги (дорсальные)",
+  "AD",
+  "AV",
+  "PV",
+  "PD",
+  "AR",
+  "PR",
+  "AL",
+  "PL",
 ];
 
-export const DESCRIPTION_VARIABLE_GROUPS = GROUP_ORDER.map((name) => ({
-  name,
-  variables: DESCRIPTION_VARIABLES.filter(
-    (variable) => variable.group === name,
-  ),
-}));
+// Подгруппа первичной переменной: дуга из токена (om.ad.*) либо «Общие».
+const primarySubgroupOf = (variable) => {
+  const match = /om\.(ad|av|pv|pd|ar|pr|al|pl)\./.exec(variable.token);
+  return match ? match[1].toUpperCase() : "Общие";
+};
+
+export const DESCRIPTION_VARIABLE_GROUPS = computed(() =>
+  GROUP_ORDER.map((name) => {
+    const variables = allVariables.value.filter(
+      (variable) => variable.group === name,
+    );
+
+    const subgroups =
+      name === "Первичные"
+        ? PRIMARY_SUBGROUP_ORDER.map((subgroup) => ({
+            name: subgroup,
+            variables: variables.filter(
+              (variable) => primarySubgroupOf(variable) === subgroup,
+            ),
+          })).filter((subgroup) => subgroup.variables.length > 0)
+        : [{ name: null, variables }];
+
+    return { name, subgroups };
+  }),
+);
 
 // Подставить значения переменных в markdown-текст.
 // Неизвестные плейсхолдеры остаются как есть.
 export function resolveVariables(markdown, om) {
   if (!markdown) return "";
   const values = new Map(
-    DESCRIPTION_VARIABLES.map((variable) => [
+    allVariables.value.map((variable) => [
       variable.token,
       variable.resolve(om),
     ]),
