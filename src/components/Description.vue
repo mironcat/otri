@@ -20,7 +20,7 @@
             <MarkdownEditor ref="editorRef" v-model="editorText" class="description-editor__code" />
           </q-tab-panel>
           <q-tab-panel name="variables" class="description-editor__panel">
-            <CustomVariablesEditor />
+            <CustomVariablesEditor ref="customVarsEditorRef" />
           </q-tab-panel>
         </q-tab-panels>
       </div>
@@ -28,7 +28,7 @@
         aria-label="Изменить ширину панели переменных" @pointerdown="startEditorResize"
         @keydown.left.prevent="nudgeEditorVars(-16)" @keydown.right.prevent="nudgeEditorVars(16)"></div>
       <div class="description-editor__vars" :style="{ width: `${editorVarsWidth}px` }">
-        <DescriptionVariablesPanel :groups="variableGroups" @insert="insertToken" />
+        <DescriptionVariablesPanel :groups="variableGroups" @insert="insertToken" @edit="editVariable" />
       </div>
     </div>
 
@@ -74,6 +74,7 @@ const renderedHtml = computed(() =>
 const editorText = ref(markdownSource.value);
 
 const editorRef = ref(null);
+const customVarsEditorRef = ref(null);
 
 // Активная вкладка левой части редактора: markdown или редактор переменных.
 const editorTab = ref("markdown");
@@ -124,6 +125,12 @@ watch(editorText, (value) => emit("update:markdown", value));
 const insertToken = (token) => {
   editorTab.value = "markdown";
   nextTick(() => editorRef.value?.insertAtCursor(token));
+};
+
+// Клик по вторичной/текстовой переменной: открываем её в редакторе переменных.
+const editVariable = (variable) => {
+  editorTab.value = "variables";
+  nextTick(() => customVarsEditorRef.value?.selectByToken(variable.token));
 };
 </script>
 

@@ -13,7 +13,7 @@
             clickable
             outline
             class="description-vars__chip"
-            @click="insert(variable)"
+            @click="onChipClick(variable)"
           >
             {{ variable.label }}
             <q-tooltip>{{ token(variable) }}</q-tooltip>
@@ -29,11 +29,21 @@ defineProps({
   groups: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(["insert"]);
+const emit = defineEmits(["insert", "edit"]);
 
 const token = (variable) => `{${variable.token}}`;
 
-const insert = (variable) => emit("insert", token(variable));
+// Вторичные и текстовые переменные открываем в редакторе, остальные —
+// вставляем в markdown.
+const EDITABLE_GROUPS = new Set(["Числовые вторичные", "Текстовые"]);
+
+const onChipClick = (variable) => {
+  if (variable.editable && EDITABLE_GROUPS.has(variable.group)) {
+    emit("edit", variable);
+    return;
+  }
+  emit("insert", token(variable));
+};
 </script>
 
 <style scoped>

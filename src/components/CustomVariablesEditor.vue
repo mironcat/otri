@@ -1,92 +1,122 @@
 <template>
   <div class="custom-vars">
     <div class="custom-vars__hint">
-      Пользовательские переменные на основе первичных данных. В выражении
+      Переменные описания хранятся в <code>settings.json</code>. Можно менять
+      встроенные вторичные/текстовые переменные и добавлять свои. В выражении
       доступны <code>om</code>, <code>Math</code>, <code>fmt()</code>,
-      <code>ratio()</code>, <code>degrees()</code> и функции интерпретации
-      (<code>getShellLengthType</code> и др.). Токен подставляется в текст
-      как <code>{имя}</code>.
+      <code>ratio()</code>, <code>degrees()</code>, <code>getLength()</code>,
+      <code>getHeight()</code> и функции интерпретации. Токен подставляется
+      в текст как <code>{имя}</code>.
     </div>
 
-    <q-list v-if="customVariables.length" separator class="custom-vars__list">
-      <q-item v-for="variable in customVariables" :key="variable.id">
-        <q-item-section>
-          <q-item-label class="custom-vars__label">
-            {{ variable.label }}
-            <span class="custom-vars__token">{{ '{' + variable.token + '}' }}</span>
-            <q-badge :color="variable.type === 'text' ? 'teal' : 'primary'" class="q-ml-sm">
-              {{ variable.type === "text" ? "текст" : "число" }}
-            </q-badge>
-          </q-item-label>
-          <q-item-label caption class="custom-vars__expr">
-            {{ variable.expression }}
-          </q-item-label>
-        </q-item-section>
-        <q-item-section side>
-          <div class="row no-wrap">
-            <q-btn flat dense round icon="edit" aria-label="Редактировать" @click="startEdit(variable)">
-              <q-tooltip>Редактировать</q-tooltip>
-            </q-btn>
-            <q-btn flat dense round icon="delete" color="negative" aria-label="Удалить" @click="remove(variable)">
-              <q-tooltip>Удалить</q-tooltip>
-            </q-btn>
+    <div v-if="settingsPath" class="custom-vars__path">
+      Файл настроек: <code>{{ settingsPath }}</code>
+    </div>
+
+    <div class="custom-vars__list-header">
+      <span class="custom-vars__list-title">Переменные</span>
+      <q-btn size="sm" color="primary" icon="add" no-caps label="Добавить"
+        @click="startNew" />
+    </div>
+
+    <q-expansion-item v-model="newExpanded" icon="add_circle_outline"
+      label="Новая переменная" header-class="custom-vars__expansion"
+      class="custom-vars__new">
+      <div class="custom-vars__form">
+        <q-select v-model="newForm.type" :options="typeOptions" emit-value
+          map-options dense outlined label="Тип" class="q-mb-sm" />
+        <q-input v-model="newForm.label" dense outlined label="Подпись"
+          class="q-mb-sm" />
+        <q-input v-model="newForm.token" dense outlined
+          label="Имя переменной (латиницей)" hint="Подставляется как {имя}"
+          :error="!!newTokenError" :error-message="newTokenError"
+          class="q-mb-sm" />
+        <q-input v-model="newForm.expression" dense outlined type="textarea"
+          autogrow label="Выражение" :error="!!newExpressionError"
+          :error-message="newExpressionError"
+          hint="Например: ratio(om.length, om.height) или om.length >= 500 ? 'крупные' : 'мелкие'"
+          class="q-mb-sm" />
+        <q-btn color="primary" no-caps icon="add" label="Добавить"
+          :disable="!canAdd" @click="addNew" />
+      </div>
+    </q-expansion-item>
+
+    <q-list v-if="editableList.length" separator class="custom-vars__list">
+      <q-expansion-item v-for="item in editableList" :key="item.token"
+        :model-value="expandedToken === item.token"
+        @update:model-value="(value) => toggleItem(item, value)"
+        header-class="custom-vars__expansion" class="custom-vars__item">
+        <template v-slot:header>
+          <q-item-section>
+            <q-item-label class="custom-vars__label">
+              {{ item.label }}
+              <span class="custom-vars__token">{{ '{' + item.token + '}' }}</span>
+              <q-badge :color="item.type === 'text' ? 'teal' : 'primary'" class="q-ml-sm">
+                {{ item.type === "text" ? "текст" : "число" }}
+              </q-badge>
+              <q-badge v-if="item.builtin" color="grey-6" class="q-ml-xs">
+                встроенная
+              </q-badge>
+              <q-badge v-else color="deep-orange" class="q-ml-xs">
+                пользовательская
+              </q-badge>
+              <q-badge v-if="isModified(item)" color="orange-8" class="q-ml-xs">
+                изменена
+              </q-badge>
+            </q-item-label>
+            <q-item-label caption class="custom-vars__expr">
+              {{ item.expression }}
+            </q-item-label>
+          </q-item-section>
+        </template>
+
+        <div class="custom-vars__form">
+          <q-select :model-value="item.type" :options="typeOptions" emit-value
+            map-options dense outlined label="Тип" class="q-mb-sm"
+            @update:model-value="(value) => setType(item, value)" />
+          <q-input v-model="item.label" dense outlined label="Подпись"
+            class="q-mb-sm" />
+          <q-input :model-value="item.token" dense outlined
+            label="Имя переменной" disable class="q-mb-sm" />
+          <q-input v-model="item.expression" dense outlined type="textarea"
+            autogrow label="Выражение" :error="!!expressionErrorOf(item)"
+            :error-message="expressionErrorOf(item)"
+            hint="Например: ratio(om.length, om.height)" class="q-mb-sm" />
+
+          <div class="row items-center q-gutter-sm">
+            <q-btn v-if="item.builtin" flat color="warning" no-caps
+              icon="restart_alt" label="Сбросить" @click="resetItem(item)" />
+            <q-btn v-else flat color="negative" no-caps icon="delete"
+              label="Удалить" @click="removeItem(item)" />
           </div>
-        </q-item-section>
-      </q-item>
+        </div>
+      </q-expansion-item>
     </q-list>
 
     <div v-else class="custom-vars__empty">
-      Пока нет пользовательских переменных.
+      Пока нет редактируемых переменных.
     </div>
-
-    <q-btn class="custom-vars__add" color="primary" icon="add" no-caps
-      label="Добавить переменную" @click="startAdd" />
-
-    <q-dialog v-model="dialogOpen">
-      <q-card class="custom-vars__dialog">
-        <q-card-section class="text-subtitle1">
-          {{ editingId ? "Редактирование переменной" : "Новая переменная" }}
-        </q-card-section>
-
-        <q-card-section class="q-gutter-sm">
-          <q-select v-model="form.type" :options="typeOptions" emit-value
-            map-options dense outlined label="Тип" />
-          <q-input v-model="form.label" dense outlined
-            label="Подпись (в панели переменных)" />
-          <q-input v-model="form.token" dense outlined
-            label="Имя переменной (латиницей)" hint="Подставляется как {имя}"
-            :error="!!tokenError" :error-message="tokenError" />
-          <q-input v-model="form.expression" dense outlined type="textarea"
-            autogrow label="Выражение" :error="!!expressionError"
-            :error-message="expressionError"
-            hint="Например: ratio(om.length, om.height) или om.length >= 500 ? 'крупные' : 'мелкие'" />
-        </q-card-section>
-
-        <q-card-actions align="right">
-          <q-btn flat label="Отмена" v-close-popup />
-          <q-btn color="primary" label="Сохранить" :disable="!canSave" @click="save" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref } from "vue";
-import { useQuasar } from "quasar";
 import {
-  customVariables,
-  addCustomVariable,
-  updateCustomVariable,
-  removeCustomVariable,
-} from "@/scripts/customVariables.js";
-import { DESCRIPTION_VARIABLES } from "@/scripts/descriptionMarkdown.js";
+  variables,
+  settingsPath,
+  addVariable,
+  updateVariable,
+  removeVariable,
+  resetVariable,
+} from "@/scripts/variablesStore.js";
+import {
+  DEFAULT_VARIABLES,
+  isExpressionValid,
+} from "@/scripts/variablesDefaults.js";
 
-const $q = useQuasar();
-
-const dialogOpen = ref(false);
-const editingId = ref(null);
-const form = reactive({
+const expandedToken = ref(null);
+const newExpanded = ref(false);
+const newForm = reactive({
   type: "number",
   label: "",
   token: "",
@@ -98,107 +128,104 @@ const typeOptions = [
   { label: "Текстовая", value: "text" },
 ];
 
-const builtinTokens = new Set(DESCRIPTION_VARIABLES.map((v) => v.token));
+const defaultByToken = new Map(
+  DEFAULT_VARIABLES.map((item) => [item.token, item]),
+);
 
-const compile = (expression) => {
-  try {
-    new Function(
-      "om",
-      "Math",
-      "fmt",
-      "ratio",
-      "degrees",
-      "getShellLengthType",
-      "getPlenateType",
-      "getDegreeOfElongation",
-      "getSLNTypeofCurve",
-      "getAlfaTypeofCurve",
-      "getOrientationTypeofCurve",
-      `"use strict"; return (${expression});`,
-    );
-    return true;
-  } catch {
-    return false;
-  }
+const editableList = computed(() =>
+  variables.value.filter((item) => item.editable),
+);
+
+const isModified = (item) => {
+  const def = defaultByToken.get(item.token);
+  if (!def) return false;
+  return (
+    def.expression !== item.expression ||
+    def.label !== item.label ||
+    def.type !== item.type
+  );
 };
 
-const tokenError = computed(() => {
-  const token = form.token.trim();
+const expressionErrorOf = (item) => {
+  const expression = String(item.expression || "").trim();
+  if (!expression) return "Укажите выражение";
+  return isExpressionValid(expression) ? "" : "Ошибка в выражении";
+};
+
+const newTokenError = computed(() => {
+  const token = newForm.token.trim();
   if (!token) return "";
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(token)) {
     return "Только латинские буквы, цифры и _";
   }
-  if (builtinTokens.has(token)) {
-    return "Совпадает со встроенной переменной";
+  if (variables.value.some((item) => item.token === token)) {
+    return "Такое имя уже используется";
   }
-  const duplicate = customVariables.value.some(
-    (variable) => variable.token === token && variable.id !== editingId.value,
-  );
-  return duplicate ? "Такое имя уже используется" : "";
+  return "";
 });
 
-const expressionError = computed(() => {
-  const expression = form.expression.trim();
+const newExpressionError = computed(() => {
+  const expression = newForm.expression.trim();
   if (!expression) return "Укажите выражение";
-  return compile(expression) ? "" : "Ошибка в выражении";
+  return isExpressionValid(expression) ? "" : "Ошибка в выражении";
 });
 
-const canSave = computed(
+const canAdd = computed(
   () =>
-    form.label.trim() &&
-    form.token.trim() &&
-    form.expression.trim() &&
-    !tokenError.value &&
-    !expressionError.value,
+    newForm.label.trim() &&
+    newForm.token.trim() &&
+    newForm.expression.trim() &&
+    !newTokenError.value &&
+    !newExpressionError.value,
 );
 
-const resetForm = () => {
-  form.type = "number";
-  form.label = "";
-  form.token = "";
-  form.expression = "";
+const toggleItem = (item, value) => {
+  expandedToken.value = value ? item.token : null;
+  if (value) newExpanded.value = false;
 };
 
-const startAdd = () => {
-  editingId.value = null;
-  resetForm();
-  dialogOpen.value = true;
+const startNew = () => {
+  expandedToken.value = null;
+  newExpanded.value = true;
+  newForm.type = "number";
+  newForm.label = "";
+  newForm.token = "";
+  newForm.expression = "";
 };
 
-const startEdit = (variable) => {
-  editingId.value = variable.id;
-  form.type = variable.type;
-  form.label = variable.label;
-  form.token = variable.token;
-  form.expression = variable.expression;
-  dialogOpen.value = true;
+const addNew = () => {
+  if (!canAdd.value) return;
+  const token = newForm.token.trim();
+  addVariable({
+    token,
+    label: newForm.label.trim(),
+    type: newForm.type,
+    expression: newForm.expression.trim(),
+  });
+  newExpanded.value = false;
+  expandedToken.value = token;
 };
 
-const save = () => {
-  if (!canSave.value) return;
-  const payload = {
-    label: form.label.trim(),
-    token: form.token.trim(),
-    type: form.type,
-    expression: form.expression.trim(),
-  };
-  if (editingId.value) {
-    updateCustomVariable(editingId.value, payload);
-  } else {
-    addCustomVariable(payload);
+const setType = (item, type) => {
+  updateVariable(item.token, { type });
+};
+
+const resetItem = (item) => resetVariable(item.token);
+
+const removeItem = (item) => {
+  removeVariable(item.token);
+  if (expandedToken.value === item.token) expandedToken.value = null;
+};
+
+// Открыть переменную по токену (из панели chip'ов).
+const selectByToken = (token) => {
+  if (editableList.value.some((item) => item.token === token)) {
+    newExpanded.value = false;
+    expandedToken.value = token;
   }
-  dialogOpen.value = false;
 };
 
-const remove = (variable) => {
-  $q.dialog({
-    title: "Удаление переменной",
-    message: `Удалить «${variable.label}»?`,
-    cancel: { label: "Отмена", flat: true },
-    ok: { label: "Удалить", color: "negative", unelevated: true },
-    persistent: true,
-  }).onOk(() => removeCustomVariable(variable.id));
-};
+defineExpose({ selectByToken });
 </script>
 
 <style scoped>
@@ -220,6 +247,36 @@ const remove = (variable) => {
 
 .custom-vars__hint code {
   font-size: 11px;
+}
+
+.custom-vars__path {
+  font-size: 11px;
+  color: var(--otri-text-subtle);
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+
+.custom-vars__path code {
+  font-size: 11px;
+}
+
+.custom-vars__list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.custom-vars__list-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--otri-text-muted);
+}
+
+.custom-vars__expansion {
+  min-height: 0;
+  padding: 4px 8px;
 }
 
 .custom-vars__label {
@@ -245,12 +302,11 @@ const remove = (variable) => {
   padding: 8px 0;
 }
 
-.custom-vars__add {
-  margin-top: 8px;
+.custom-vars__form {
+  padding: 8px 4px 4px;
 }
 
-.custom-vars__dialog {
-  min-width: 360px;
-  max-width: 520px;
+.custom-vars__new {
+  margin-bottom: 8px;
 }
 </style>

@@ -12,6 +12,7 @@ const platform = process.platform || os.platform()
 
 const PROJECT_EXTENSION = '.otr'
 const PROJECT_OPEN_CHANNEL = 'project:open-request'
+const SETTINGS_FILE = 'settings.json'
 
 const IMAGE_MIME = {
   '.png': 'image/png',
@@ -38,6 +39,11 @@ function sendProjectAction (action) {
   const win =
     BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
   if (win) win.webContents.send('menu:project-action', action)
+}
+
+// Файл настроек приложения (каталог переменных описания и т.п.).
+function settingsFilePath () {
+  return path.join(app.getPath('userData'), SETTINGS_FILE)
 }
 
 function focusMainWindow () {
@@ -255,6 +261,25 @@ function registerProjectIpc () {
       dataUrl: `data:${mime};base64,${buf.toString('base64')}`
     }
   })
+
+  // Настройки приложения: читаем/пишем JSON-файл в userData.
+  ipcMain.handle('settings:read', async () => {
+    try {
+      const text = await fs.readFile(settingsFilePath(), 'utf8')
+      return JSON.parse(text)
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('settings:write', async (event, data) => {
+    const target = settingsFilePath()
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.writeFile(target, JSON.stringify(data, null, 2), 'utf8')
+    return true
+  })
+
+  ipcMain.handle('settings:path', () => settingsFilePath())
 }
 
 async function createWindow () {

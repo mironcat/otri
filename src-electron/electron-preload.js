@@ -63,3 +63,13 @@ contextBridge.exposeInMainWorld('otriProject', {
     return () => ipcRenderer.removeListener('menu:project-action', handler)
   }
 })
+
+/**
+ * Настройки приложения: каталог переменных описания и т.п.
+ * В renderer доступно как window.otriSettings.
+ */
+contextBridge.exposeInMainWorld('otriSettings', {
+  read: () => ipcRenderer.invoke('settings:read'),
+  write: (data) => ipcRenderer.invoke('settings:write', data),
+  path: () => ipcRenderer.invoke('settings:path')
+})
