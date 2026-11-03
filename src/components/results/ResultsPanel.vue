@@ -3,9 +3,9 @@
     <div class="tables-split" :class="{ 'tables-split--editor': descriptionEditor && descriptionVisible }">
       <ResultsTable :rows="combinedRows" :selected-record-nos="selectedNos" :active-record-no="activeRecordNo"
         :show-description="descriptionVisible" @update:selected-record-nos="selectedNos = $event"
-        @create-description="createDescription" @focus-record="emit('focus-record', $event)"
-        @edit-record="emit('edit-record', $event)" @delete-record="emit('delete-record', $event)"
-        @update:show-description="descriptionVisible = $event" />
+        @create-description="createDescription" @export-csv="emit('export-csv')"
+        @focus-record="emit('focus-record', $event)" @edit-record="emit('edit-record', $event)"
+        @delete-record="emit('delete-record', $event)" @update:show-description="descriptionVisible = $event" />
       <DescriptionPanel :visible="descriptionVisible" :descriptions="descriptionsModel"
         :selected-description-id="selectedDescriptionIdModel" :description="selectedDescription"
         :editor-mode="descriptionEditor"
@@ -42,6 +42,7 @@ const emit = defineEmits([
   "update:descriptions",
   "update:selectedDescriptionId",
   "update:showDescription",
+  "export-csv",
   "focus-record",
   "edit-record",
   "delete-record",

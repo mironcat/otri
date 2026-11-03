@@ -1,45 +1,61 @@
 <template>
   <q-page class="column canvas-page">
-    <div class="row q-mx-md q-mt-md items-center">
-      <div class="q-gutter-sm">
-        <q-btn color="secondary" @click="zoomIn" icon="zoom_in" />
-        <q-btn color="secondary" @click="zoomOut" icon="zoom_out" />
-        <q-btn color="secondary" @click="rotateImage(-0.5)" icon="rotate_left" />
-        <q-btn color="secondary" @click="rotateImage(0.5)" icon="rotate_right" />
-        <q-btn v-show="!om.settings.image_lock" color="secondary" @click="
-          mainimage.draggable(false);
-        om.settings.image_lock = !om.settings.image_lock;
-        " icon="lock_open" />
-        <q-btn v-show="om.settings.image_lock" color="secondary" @click="
-          mainimage.draggable(true);
-        om.settings.image_lock = !om.settings.image_lock;
-        " icon="lock" />
+    <!-- Управление холстом вынесено в шапку приложения (q-toolbar в MainLayout).
+         defer: цель телепорта создаётся в родительском layout, поэтому подключаем
+         содержимое после завершения текущего цикла отрисовки. -->
+    <Teleport defer to="#canvas-controls">
+      <div class="canvas-controls">
+        <!-- Кнопки управления изображением -->
+        <div v-if="!canvasHidden" class="canvas-controls__toggles">
+          <q-btn color="secondary" @click="zoomIn" icon="zoom_in">
+            <q-tooltip>Приблизить</q-tooltip>
+          </q-btn>
+          <q-btn color="secondary" @click="zoomOut" icon="zoom_out">
+            <q-tooltip>Отдалить</q-tooltip>
+          </q-btn>
+          <q-btn color="secondary" @click="rotateImage(-0.5)" icon="rotate_left">
+            <q-tooltip>Повернуть влево</q-tooltip>
+          </q-btn>
+          <q-btn color="secondary" @click="rotateImage(0.5)" icon="rotate_right">
+            <q-tooltip>Повернуть вправо</q-tooltip>
+          </q-btn>
+          <q-btn v-show="!om.settings.image_lock" color="secondary" @click="
+            mainimage.draggable(false);
+          om.settings.image_lock = !om.settings.image_lock;
+          " icon="lock_open">
+            <q-tooltip>Заблокировать изображение</q-tooltip>
+          </q-btn>
+          <q-btn v-show="om.settings.image_lock" color="secondary" @click="
+            mainimage.draggable(true);
+          om.settings.image_lock = !om.settings.image_lock;
+          " icon="lock">
+            <q-tooltip>Разблокировать изображение</q-tooltip>
+          </q-btn>
+          <q-checkbox v-model="om.lateral_side" @click="
+            bus.emit('lateral-show', om.lateral_side & !om.concave_vs);
+          bus.emit('concave-vs', om.lateral_side & om.concave_vs);
+          " :label="$q.screen.lt.lg ? 'Лат.' : 'Латеральная'" color="primary" />
 
-        <q-checkbox v-model="om.lateral_side" @click="
-          bus.emit('lateral-show', om.lateral_side & !om.concave_vs);
-        bus.emit('concave-vs', om.lateral_side & om.concave_vs);
-        " label="Латеральная" color="primary" />
+          <q-radio v-show="om.lateral_side" v-model="om.side" val="left" :label="$q.screen.lt.lg ? 'Л' : 'Левая'"
+            @click="bus.emit('side-change', 'blue')" />
+          <q-radio v-show="om.lateral_side" v-model="om.side" val="right" :label="$q.screen.lt.lg ? 'П' : 'Правая'"
+            @click="bus.emit('side-change', 'gray')" />
 
-        <q-radio v-show="om.lateral_side" v-model="om.side" val="left" label="Левая"
-          @click="bus.emit('side-change', 'blue')" />
-        <q-radio v-show="om.lateral_side" v-model="om.side" val="right" label="Правая"
-          @click="bus.emit('side-change', 'gray')" />
+          <q-toggle v-show="om.lateral_side" v-model="om.concave_vs"
+            :label="$q.screen.lt.lg ? 'ВГП' : 'Вогнутый брюшной край'" @click="
+              bus.emit('concave-vs', om.concave_vs);
+            bus.emit('lateral-show', !om.concave_vs);
+            " />
+          <q-checkbox v-model="om.dorsal_side" @click="bus.emit('dorsal-show', om.dorsal_side)"
+            :label="$q.screen.lt.lg ? 'Дорс.' : 'Дорсальная'" color="green" />
+          <q-checkbox v-show="om.dorsal_side" v-model="om.half"
+            @click="om.half ? (om.fullness = 'half') : (om.fullness = 'full')" label="Половина"
+            :color="$q.dark.isActive ? 'grey-4' : 'black'" />
+        </div>
 
-        <q-toggle v-show="om.lateral_side" v-model="om.concave_vs" label="Вогнутый брюшной край" @click="
-          bus.emit('concave-vs', om.concave_vs);
-        bus.emit('lateral-show', !om.concave_vs);
-        " />
-        <q-checkbox v-model="om.dorsal_side" @click="bus.emit('dorsal-show', om.dorsal_side)" label="Дорсальная"
-          color="green" />
-        <q-checkbox v-show="om.dorsal_side" v-model="om.half"
-          @click="om.half ? (om.fullness = 'half') : (om.fullness = 'full')" label="Половина"
-          :color="$q.dark.isActive ? 'grey-4' : 'black'" />
+
       </div>
-      <q-space />
-      <q-btn flat color="secondary" :icon="canvasHidden ? 'visibility' : 'visibility_off'" @click="toggleCanvas">
-        <q-tooltip>{{ canvasHidden ? 'Показать холст' : 'Скрыть холст' }}</q-tooltip>
-      </q-btn>
-    </div>
+    </Teleport>
     <div v-show="!canvasHidden" class="row q-ma-md canvas-row">
       <div id="canvas" ref="canvasRef"></div>
       <q-btn class="canvas-fab" round unelevated color="primary" icon="add_box" :disable="!activeFrameHidden"
@@ -48,31 +64,35 @@
       </q-btn>
     </div>
     <div class="row q-ma-md q-gutter-sm flex items-center">
-      <q-file bg-color="secondary" dense v-model="imagefile" label="Выберите файл" filled style="max-width: 400px"
-        @update:model-value="fileUploaded">
+
+      <q-file v-show="!canvasHidden" bg-color="secondary" dense v-model="imagefile" label="Выберите файл" filled
+        style="max-width: 400px" @update:model-value="fileUploaded">
         <template v-slot:prepend>
           <q-icon name="attach_file" />
         </template>
       </q-file>
-      <q-input dense v-model="scales.length" label="Длина масштабной линейки" type="number" filled
-        style="max-width: 150px" @change="onScalebarLengthEdited" />
+      <q-input v-show="!canvasHidden" dense v-model="scales.length" label="Длина масштабной линейки" type="number"
+        filled style="max-width: 150px" @change="onScalebarLengthEdited" />
 
-      <q-btn color="primary" @click="setScaleBar" label="Задать масштаб" />
-      <q-input v-show="om.settings.scalebar_ready" dense v-model="om.label" filled label="Метка"
+      <q-btn v-show="!canvasHidden" color="primary" @click="setScaleBar" label="Задать масштаб" />
+      <q-input v-show="!canvasHidden && om.settings.scalebar_ready" dense v-model="om.label" filled label="Метка"
         style="max-width: 150px" class="q-mr-sm" />
-      <q-btn v-show="om.settings.scalebar_ready" icon="save" color="primary" @click="addRecord" label="Добавить запись"
-        class="q-mr-sm" />
-      <q-btn v-show="rows.lateral.length > 0 || rows.dorsal.length > 0" color="brown" icon-right="archive"
-        label="Экспорт в CSV" no-caps @click="exportCombinedTable" />
+      <q-btn v-show="!canvasHidden && om.settings.scalebar_ready" icon="save" color="primary" @click="addRecord"
+        label="Добавить запись" class="q-mr-sm" />
       <!-- TEMP: кнопка нагрузочного теста. Удалить вместе с generateLoadTestData. -->
-      <q-btn v-if="isDev" color="deep-orange" icon="science" :label="`ТЕСТ: ${LOAD_TEST_RECORD_COUNT} записей`" no-caps
+      <!-- <q-btn v-if="isDev" color="deep-orange" icon="science" :label="`ТЕСТ: ${LOAD_TEST_RECORD_COUNT} записей`" no-caps
         @click="confirmLoadTestData">
         <q-tooltip>Временная генерация 50 рамок и записей для нагрузочного теста</q-tooltip>
-      </q-btn>
-      <q-btn v-show="rows.lateral.length > 0 || rows.dorsal.length > 0" :color="showTables ? 'secondary' : 'primary'"
-        :icon="showTables ? 'visibility_off' : 'visibility'" :label="showTables ? 'Скрыть' : 'Показать результаты'"
-        no-caps class="q-ml-auto" @click="showTables = !showTables">
+      </q-btn> -->
+      <q-space />
+      <q-btn v-show="rows.lateral.length > 0 || rows.dorsal.length > 0" :color="'primary'"
+        :icon="showTables ? 'visibility_off' : 'visibility'" label="Результаты" no-caps class="q-ml-auto"
+        @click="showTables = !showTables">
         <q-tooltip>{{ showTables ? 'Скрыть результаты' : 'Показать результаты' }}</q-tooltip>
+      </q-btn>
+      <q-btn color="secondary" :icon="canvasHidden ? 'visibility' : 'visibility_off'" @click="toggleCanvas"
+        label="Холст">
+        <q-tooltip>{{ canvasHidden ? 'Показать холст' : 'Скрыть холст' }}</q-tooltip>
       </q-btn>
       <!-- <q-chip>{{ scales.factor }}</q-chip> -->
     </div>
@@ -80,7 +100,7 @@
       :active-record-no="activeRecordNo" v-model:selected-record-nos="selectedRecordNos"
       v-model:descriptions="generatedDescriptions" v-model:selected-description-id="selectedDescriptionId"
       v-model:show-description="showDescription" @focus-record="focusedRecordNo = $event" @edit-record="activateRecord"
-      @delete-record="confirmDeleteRecord" />
+      @delete-record="confirmDeleteRecord" @export-csv="exportCombinedTable" />
   </q-page>
 </template>
 <script setup>
@@ -117,6 +137,7 @@ import concaveLeftSideObjects from "@/scripts/concaveobjects.js";
 import { initGuides, resizeGuides } from "@/scripts/guides.js";
 import { initMagnifier } from "@/scripts/magnifier.js";
 import { exportCombinedTable as exportResultsCsv } from "@/scripts/resultsCsv.js";
+import { canvasHidden } from "@/scripts/canvasVisibility.js";
 import ResultsPanel from "@/components/results/ResultsPanel.vue";
 
 const canvasRef = ref();
@@ -168,8 +189,6 @@ const generatedDescriptions = ref([]);
 const selectedDescriptionId = ref(null);
 // Активная рамка скрыта после сохранения записи — кнопка «Создать рамку» доступна
 const activeFrameHidden = ref(false);
-// Холст можно скрыть, чтобы освободить место для таблицы и описания
-const canvasHidden = ref(false);
 // Общие параметры графиков для sidebar
 const graphSettings = ref(normalizeGraphSettings());
 // Ширина sidebar (приходит из MainLayout)
@@ -2209,6 +2228,19 @@ image {
    поэтому скрытие/показ таблиц не может «раздуть» страницу. */
 .canvas-page {
   overflow: hidden;
+}
+
+/* Элементы управления холстом, телепортированные в шапку (MainLayout).
+   Все в один ряд; при нехватке ширины шапка прокручивается. */
+.canvas-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px 8px;
+  flex: 0 0 auto;
+}
+
+.canvas-controls .q-btn {
+  margin: 0;
 }
 
 /* Ряд канваса не должен зависеть от размера SVG: иначе явная высота

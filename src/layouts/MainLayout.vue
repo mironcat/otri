@@ -1,56 +1,85 @@
 <template>
   <q-layout view="hHh lpR fFf">
-    <q-header elevated>
-      <q-toolbar>
+    <q-header elevated class="app-header">
+      <q-toolbar class="main-toolbar">
         <q-btn flat dense round icon="menu" aria-label="Меню" @click="toggleLeftDrawer" />
-        <q-btn flat dense round icon="save" aria-label="Сохранить проект"
-          @click="bus.emit('save-project')">
+        <div class="q-ml-sm"> Otri <small>v{{ version }}</small> </div>
+        <q-btn flat dense round icon="save" aria-label="Сохранить проект" @click="bus.emit('save-project')">
           <q-tooltip>Сохранить проект (.otr)</q-tooltip>
         </q-btn>
-        <q-btn flat dense round icon="folder_open" aria-label="Открыть проект"
-          @click="bus.emit('open-project')">
+        <q-btn flat dense round icon="folder_open" aria-label="Открыть проект" @click="bus.emit('open-project')">
           <q-tooltip>Открыть проект (.otr)</q-tooltip>
         </q-btn>
-        <q-btn-group flat>
+        <q-space />
 
-          <q-btn flat dense round icon="border_horizontal" :color="guidesVisible.h ? 'pink-4' : 'grey-6'"
-            aria-label="Показать или скрыть горизонтальную направляющую" @click="toggleGuide('h')">
-            <q-tooltip>Горизонтальная направляющая (клавиша 1)</q-tooltip>
-          </q-btn>
-          <q-btn flat dense round icon="border_vertical" :color="guidesVisible.v1 ? 'pink-4' : 'grey-6'"
-            aria-label="Показать или скрыть вертикальную направляющую 1" @click="toggleGuide('v1')">
-            <q-tooltip>Левая вертикальная направляющая (клавиша 2)</q-tooltip>
-          </q-btn>
-          <q-btn flat dense round icon="border_vertical" :color="guidesVisible.v2 ? 'pink-4' : 'grey-6'"
-            aria-label="Показать или скрыть вертикальную направляющую 2" @click="toggleGuide('v2')">
-            <q-tooltip>Правая вертикальная направляющая (клавиша 3)</q-tooltip>
-          </q-btn>
-          <q-btn flat dense round icon="search" :color="magnifierVisible ? 'pink-4' : 'grey-6'"
-            aria-label="Лупа" @click="toggleMagnifier">
-            <q-tooltip>Лупа при перетаскивании точек (клавиша Z)</q-tooltip>
-          </q-btn>
+        <!-- Центральная группа: управление холстом + направляющие/масштаб -->
+        <div class="canvas-controls-center">
+          <div id="canvas-controls" class="canvas-controls-slot"></div>
 
-          <!-- <q-btn flat dense round icon="tune" :color="styleChanged ? 'pink-4' : 'grey-6'"
-            aria-label="Vector element sizes">
-            <q-tooltip>Размер точек и линий</q-tooltip>
-            <q-popup-proxy>
-              <q-card class="q-pa-md" style="min-width: 240px">
-                <div class="text-subtitle2 q-mb-sm">Размер точек и линий</div>
-                <q-input dense filled type="number" v-model="pointScale" label="Точки" :min="0.25" :max="4" :step="0.25"
-                  @update:model-value="onPointScale" />
-                <q-input dense filled type="number" v-model="lineScale" label="Линии" :min="0.25" :max="4" :step="0.25"
-                  class="q-mt-sm" @update:model-value="onLineScale" />
-              </q-card>
-            </q-popup-proxy>
-          </q-btn> -->
-        </q-btn-group>
+          <!-- На широком экране — в строке; на узком — в выпадающем меню -->
+          <div v-if="!canvasHidden && !$q.screen.lt.xl" class="canvas-controls__toggles">
+            <q-btn-group flat>
+              <q-btn flat dense round icon="border_horizontal" :color="guidesVisible.h ? 'pink-4' : 'grey-6'"
+                aria-label="Показать или скрыть горизонтальную направляющую" @click="toggleGuide('h')">
+                <q-tooltip>Горизонтальная направляющая (клавиша 1)</q-tooltip>
+              </q-btn>
+              <q-btn flat dense round icon="border_vertical" :color="guidesVisible.v1 ? 'pink-4' : 'grey-6'"
+                aria-label="Показать или скрыть вертикальную направляющую 1" @click="toggleGuide('v1')">
+                <q-tooltip>Левая вертикальная направляющая (клавиша 2)</q-tooltip>
+              </q-btn>
+              <q-btn flat dense round icon="border_vertical" :color="guidesVisible.v2 ? 'pink-4' : 'grey-6'"
+                aria-label="Показать или скрыть вертикальную направляющую 2" @click="toggleGuide('v2')">
+                <q-tooltip>Правая вертикальная направляющая (клавиша 3)</q-tooltip>
+              </q-btn>
+              <q-btn flat dense round icon="search" :color="magnifierVisible ? 'pink-4' : 'grey-6'" aria-label="Лупа"
+                @click="toggleMagnifier">
+                <q-tooltip>Лупа при перетаскивании точек (клавиша Z)</q-tooltip>
+              </q-btn>
+            </q-btn-group>
 
-        <q-input class="q-mx-lg" :bg-color="inputBgColor" dense filled type="number" v-model="pointScale" label="Точки"
-          :min="0.25" :max="4" :step="0.25" @update:model-value="onPointScale" />
-        <q-input class="q-mr-md" :bg-color="inputBgColor" dense filled type="number" v-model="lineScale" label="Линии"
-          :min="0.25" :max="4" :step="0.25" @update:model-value="onLineScale" />
+            <q-input :bg-color="inputBgColor" dense filled type="number" v-model="pointScale" label="Точки" :min="0.25"
+              :max="4" :step="0.25" @update:model-value="onPointScale" />
+            <q-input :bg-color="inputBgColor" dense filled type="number" v-model="lineScale" label="Линии" :min="0.25"
+              :max="4" :step="0.25" @update:model-value="onLineScale" />
+          </div>
+
+          <q-btn v-else-if="!canvasHidden" flat dense round icon="tune" aria-label="Направляющие и масштаб">
+            <q-menu anchor="bottom right" self="top right">
+              <div class="canvas-controls-menu">
+                <q-btn-group flat>
+                  <q-btn flat dense round icon="border_horizontal" :color="guidesVisible.h ? 'pink-4' : 'grey-6'"
+                    aria-label="Показать или скрыть горизонтальную направляющую" @click="toggleGuide('h')">
+                    <q-tooltip>Горизонтальная направляющая (клавиша 1)</q-tooltip>
+                  </q-btn>
+                  <q-btn flat dense round icon="border_vertical" :color="guidesVisible.v1 ? 'pink-4' : 'grey-6'"
+                    aria-label="Показать или скрыть вертикальную направляющую 1" @click="toggleGuide('v1')">
+                    <q-tooltip>Левая вертикальная направляющая (клавиша 2)</q-tooltip>
+                  </q-btn>
+                  <q-btn flat dense round icon="border_vertical" :color="guidesVisible.v2 ? 'pink-4' : 'grey-6'"
+                    aria-label="Показать или скрыть вертикальную направляющую 2" @click="toggleGuide('v2')">
+                    <q-tooltip>Правая вертикальная направляющая (клавиша 3)</q-tooltip>
+                  </q-btn>
+                  <q-btn flat dense round icon="search" :color="magnifierVisible ? 'pink-4' : 'grey-6'" aria-label="Лупа"
+                    @click="toggleMagnifier">
+                    <q-tooltip>Лупа при перетаскивании точек (клавиша Z)</q-tooltip>
+                  </q-btn>
+                </q-btn-group>
+
+                <q-input :bg-color="inputBgColor" dense filled type="number" v-model="pointScale" label="Точки" :min="0.25"
+                  :max="4" :step="0.25" @update:model-value="onPointScale" />
+                <q-input :bg-color="inputBgColor" dense filled type="number" v-model="lineScale" label="Линии" :min="0.25"
+                  :max="4" :step="0.25" @update:model-value="onLineScale" />
+              </div>
+            </q-menu>
+            <q-tooltip>Направляющие и масштаб</q-tooltip>
+          </q-btn>
+        </div>
 
         <q-space />
+
+
+
+
 
         <q-btn flat dense round :icon="$q.dark.isActive ? 'light_mode' : 'dark_mode'"
           :aria-label="$q.dark.isActive ? 'Включить светлую тему' : 'Включить тёмную тему'"
@@ -58,15 +87,15 @@
           <q-tooltip>{{ $q.dark.isActive ? "Светлая тема" : "Тёмная тема" }}</q-tooltip>
         </q-btn>
 
-        <div class="q-ml-sm"> Otri <small>v{{ version }}</small> </div>
+
       </q-toolbar>
     </q-header>
 
     <q-drawer v-model="leftDrawerOpen" :mini="false" :width="drawerWidth" behavior="desktop" bordered>
       <div class="drawer-inner">
         <div class="sidebar-tabs">
-          <q-tabs v-model="sidebarTab" dense no-caps align="left" active-color="primary"
-            indicator-color="primary" switch-indicator>
+          <q-tabs v-model="sidebarTab" dense no-caps align="left" active-color="primary" indicator-color="primary"
+            switch-indicator>
             <q-tab name="info" label="Измерения" />
             <q-tab name="graphs" label="Графики" :disable="graphSelectedRecordNos.length === 0" />
           </q-tabs>
@@ -77,13 +106,13 @@
             </q-tab-panel>
             <q-tab-panel name="graphs" class="q-pa-none sidebar-panel sidebar-graph-panel">
               <ResultsGraphs :rows="graphRows" :selected-record-nos="graphSelectedRecordNos"
-                :focused-record-no="graphFocusedRecordNo" :settings="graphSettings" fill
-                @focus-record="onGraphFocus" @update:settings="onGraphSettingsUpdate" />
+                :focused-record-no="graphFocusedRecordNo" :settings="graphSettings" fill @focus-record="onGraphFocus"
+                @update:settings="onGraphSettingsUpdate" />
             </q-tab-panel>
           </q-tab-panels>
         </div>
-        <div class="drawer-resize-handle" title="Изменить ширину панели"
-          @pointerdown="startDrawerResize" @dblclick="resetDrawerWidth"></div>
+        <div class="drawer-resize-handle" title="Изменить ширину панели" @pointerdown="startDrawerResize"
+          @dblclick="resetDrawerWidth"></div>
       </div>
     </q-drawer>
 
@@ -105,6 +134,7 @@ import {
   getGuidesVisibility,
   setGuideVisible,
 } from "../scripts/guides";
+import { canvasHidden } from "../scripts/canvasVisibility";
 import {
   getMagnifierVisible,
   onMagnifierChange,
@@ -413,5 +443,51 @@ function onLineScale(value) {
 .drawer-resize-handle:active::after {
   background: var(--q-primary);
   opacity: 0.45;
+}
+
+/* Шапка и тулбар в цветах темы (а не в primary-синем).
+   --otri-surface / --otri-text-muted переключаются вместе с темой. */
+.app-header,
+.app-header .main-toolbar {
+  background-color: var(--otri-surface);
+  color: var(--otri-text-muted);
+}
+
+/* Единая строка шапки со всеми элементами управления холстом.
+   При нехватке ширины шапка прокручивается по горизонтали. */
+.main-toolbar {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Элементы не сжимаются: при нехватке ширины включается горизонтальная
+   прокрутка вместо сплющивания подписей и полей. */
+.main-toolbar>* {
+  flex-shrink: 0;
+}
+
+.main-toolbar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.main-toolbar::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.4);
+  border-radius: 2px;
+}
+
+/* Слот, в который телепортируются элементы управления холстом из IndexPage */
+.canvas-controls-slot {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* Центральная группа тулбара: управление холстом + направляющие/масштаб.
+   Соседние q-space по бокам держат её по центру. */
+.canvas-controls-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 </style>

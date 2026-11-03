@@ -38,6 +38,10 @@
             </q-btn>
           </template>
         </q-table>
+        <div class="results-table-footer">
+          <q-btn v-show="rows.length > 0" size="sm" no-caps color="brown" icon-right="archive"
+            label="Экспорт в CSV" @click="emit('export-csv')" />
+        </div>
       </div>
     </div>
   </div>
@@ -57,6 +61,7 @@ const props = defineProps({
 const emit = defineEmits([
   "update:selected-record-nos",
   "create-description",
+  "export-csv",
   "focus-record",
   "edit-record",
   "delete-record",
@@ -93,3 +98,13 @@ const rowClass = computed(
 const selectedRowsLabel = (numberOfRows) =>
   numberOfRows === 0 ? "" : `Выбрано записей: ${numberOfRows}`;
 </script>
+
+<style scoped>
+/* Подвал таблицы: экспорт результатов */
+.results-table-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-top: 1px solid var(--otri-border-soft);
+}
+</style>
