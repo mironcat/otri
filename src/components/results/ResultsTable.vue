@@ -37,11 +37,25 @@
               }}</q-tooltip>
             </q-btn>
           </template>
+          <!-- Пагинация + экспорт в одном подвале таблицы -->
+          <template v-slot:pagination="scope">
+            <span v-if="scope.pagination.rowsPerPage !== 0" class="q-table__bottom-item">
+              {{ paginationLabel(scope) }}
+            </span>
+            <template v-if="scope.pagesNumber > 1">
+              <q-btn v-if="scope.pagesNumber > 2" round dense flat size="sm" color="primary" icon="first_page"
+                :disable="scope.isFirstPage" aria-label="Первая страница" @click="scope.firstPage" />
+              <q-btn round dense flat size="sm" color="primary" icon="chevron_left" :disable="scope.isFirstPage"
+                aria-label="Предыдущая страница" @click="scope.prevPage" />
+              <q-btn round dense flat size="sm" color="primary" icon="chevron_right" :disable="scope.isLastPage"
+                aria-label="Следующая страница" @click="scope.nextPage" />
+              <q-btn v-if="scope.pagesNumber > 2" round dense flat size="sm" color="primary" icon="last_page"
+                :disable="scope.isLastPage" aria-label="Последняя страница" @click="scope.lastPage" />
+            </template>
+            <q-btn size="sm" no-caps color="brown" icon-right="archive" label="Экспорт в CSV" class="q-ml-md"
+              @click="emit('export-csv')" />
+          </template>
         </q-table>
-        <div class="results-table-footer">
-          <q-btn v-show="rows.length > 0" size="sm" no-caps color="brown" icon-right="archive"
-            label="Экспорт в CSV" @click="emit('export-csv')" />
-        </div>
       </div>
     </div>
   </div>
@@ -49,7 +63,10 @@
 
 <script setup>
 import { computed } from "vue";
+import { useQuasar } from "quasar";
 import { tableColumns } from "@/scripts/resultsTable.js";
+
+const $q = useQuasar();
 
 const props = defineProps({
   rows: { type: Array, default: () => [] },
@@ -97,14 +114,15 @@ const rowClass = computed(
 
 const selectedRowsLabel = (numberOfRows) =>
   numberOfRows === 0 ? "" : `Выбрано записей: ${numberOfRows}`;
-</script>
 
-<style scoped>
-/* Подвал таблицы: экспорт результатов */
-.results-table-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 4px 8px;
-  border-top: 1px solid var(--otri-border-soft);
-}
-</style>
+// Текст диапазона строк в пагинации (как в стандартном подвале QTable)
+const paginationLabel = ({ pagination }) => {
+  const total = props.rows.length;
+  if (pagination.rowsPerPage === 0) {
+    return $q.lang.table.pagination(1, total, total);
+  }
+  const first = (pagination.page - 1) * pagination.rowsPerPage + 1;
+  const last = Math.min(pagination.page * pagination.rowsPerPage, total);
+  return $q.lang.table.pagination(first, last, total);
+};
+</script>

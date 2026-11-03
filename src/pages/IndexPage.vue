@@ -8,10 +8,10 @@
         <!-- Кнопки управления изображением -->
         <div v-if="!canvasHidden" class="canvas-controls__toggles">
           <q-btn color="secondary" @click="zoomIn" icon="zoom_in">
-            <q-tooltip>Приблизить</q-tooltip>
+            <q-tooltip>Приблизить (+)</q-tooltip>
           </q-btn>
           <q-btn color="secondary" @click="zoomOut" icon="zoom_out">
-            <q-tooltip>Отдалить</q-tooltip>
+            <q-tooltip>Отдалить (-)</q-tooltip>
           </q-btn>
           <q-btn color="secondary" @click="rotateImage(-0.5)" icon="rotate_left">
             <q-tooltip>Повернуть влево</q-tooltip>
@@ -342,6 +342,26 @@ const resetFrameLocks = () => {
   bus.emit("pin-image-toggled", { frame: "dorsal", value: false });
 };
 
+// Включить/отключить замки («следование за картинкой») у активной рамки.
+// Если хотя бы один из активных замков открыт — закрываем все, иначе открываем.
+const toggleActiveFrameLocks = () => {
+  if (activeFrameHidden.value) return false;
+  if (!om.value.settings.pinToImage) {
+    om.value.settings.pinToImage = { left: false, dorsal: false };
+  }
+  const frames = [];
+  if (om.value.lateral_side) frames.push("left");
+  if (om.value.dorsal_side) frames.push("dorsal");
+  if (!frames.length) return false;
+  const pin = om.value.settings.pinToImage;
+  const next = !frames.every((frame) => Boolean(pin[frame]));
+  frames.forEach((frame) => {
+    pin[frame] = next;
+    bus.emit("pin-image-toggled", { frame, value: next });
+  });
+  return true;
+};
+
 const createActiveFrame = (point = null) => {
   if (!activeFrameHidden.value) return;
   if (!om.value.lateral_side && !om.value.dorsal_side) {
@@ -507,20 +527,88 @@ const trackPointer = (event) => {
 
 // Ctrl+F — то же, что кнопка «Новый фрейм». Работает только когда кнопка
 // активна (рамка скрыта после сохранения записи) и фокус не в поле ввода.
+// Escape — отмена создания новой рамки или редактирования существующей записи.
+
+// Фокус в поле ввода: глобальные горячие клавиши не перехватываем
+const isEditableTarget = (target) =>
+  target &&
+  target !== window &&
+  (target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.isContentEditable);
+
+// Открытый диалог или меню сами обрабатывают Escape
+const isOverlayOpen = () =>
+  Boolean(document.querySelector(".q-dialog, .q-menu"));
+
+// Возвращает true, если было что отменять
+const cancelActiveFrame = () => {
+  if (activeRecordNo.value != null) {
+    cancelRecordEditing();
+    return true;
+  }
+  if (!activeFrameHidden.value) {
+    hideActiveFrame();
+    return true;
+  }
+  return false;
+};
+
 const onGlobalKeydown = (event) => {
-  if (event.code !== "KeyF") return;
-  if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
-  const target = event.target;
-  if (
-    target &&
-    target !== window &&
-    (target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.tagName === "SELECT" ||
-      target.isContentEditable)
-  ) {
+  if (isEditableTarget(event.target)) return;
+
+  if (event.code === "Escape") {
+    if (canvasHidden.value || isOverlayOpen()) return;
+    if (cancelActiveFrame()) event.preventDefault();
     return;
   }
+
+  // «L» — включить/отключить замки у активной рамки
+  if (
+    event.code === "KeyL" &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    !event.repeat
+  ) {
+    if (canvasHidden.value || isOverlayOpen()) return;
+    if (toggleActiveFrameLocks()) event.preventDefault();
+    return;
+  }
+
+  // Delete — удалить запись, которая сейчас редактируется активной рамкой
+  if (
+    event.code === "Delete" &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    !event.repeat
+  ) {
+    if (canvasHidden.value || isOverlayOpen()) return;
+    if (activeRecordNo.value == null) return;
+    const row = findRecordRow(activeRecordNo.value);
+    if (!row) return;
+    event.preventDefault();
+    confirmDeleteRecord(row);
+    return;
+  }
+
+  // «+» и «-» — приблизить/отдалить холст, как кнопки в шапке
+  if (!event.ctrlKey && !event.altKey && !event.metaKey) {
+    const zoomInKey = event.key === "+";
+    const zoomOutKey = event.key === "-";
+    if (zoomInKey || zoomOutKey) {
+      if (canvasHidden.value || isOverlayOpen()) return;
+      event.preventDefault();
+      if (zoomInKey) zoomIn();
+      else zoomOut();
+      return;
+    }
+  }
+
+  if (event.code !== "KeyF") return;
+  if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
   if (!activeFrameHidden.value) return;
   if (canvasHidden.value) return;
   event.preventDefault();
@@ -534,7 +622,6 @@ const onGlobalKeydown = (event) => {
     : null;
   createActiveFrame(point);
 };
-
 // Любое внешнее отображение рамки (таблица, чекбоксы) снова делает её активной
 const onFrameShown = (visible) => {
   if (!visible) return;
@@ -749,7 +836,8 @@ const makeFrozenClone = (obj, recordNo, key) => {
   });
   editIcon.addEventListener("click", (e) => {
     e.stopPropagation();
-    activateRecord(recordNo);
+    // рамка уже перед глазами — автозум и центрирование не нужны
+    activateRecord(recordNo, { autoCenter: false });
   });
   editIcon.addEventListener("mouseenter", () => {
     editIcon.style.opacity = "1";
@@ -843,7 +931,12 @@ const lockRecordFrames = (rec) => {
 // Сделать запись активной: прячем её замороженную копию (зелёная рамка не мешает),
 // а предыдущую активную запись (если была) — показываем снова.
 // Повторный вызов для уже активной записи отменяет редактирование.
-const activateRecord = (recordNo, { lockFrames = false } = {}) => {
+// autoCenter — приближать и центрировать рамку (нужно только при выборе
+// записи в таблице; при клике по карандашу на самой рамке она уже видна).
+const activateRecord = (
+  recordNo,
+  { lockFrames = false, autoCenter = true } = {},
+) => {
   if (activeRecordNo.value === recordNo) {
     cancelRecordEditing();
     return;
@@ -856,7 +949,7 @@ const activateRecord = (recordNo, { lockFrames = false } = {}) => {
   }
   applyRecord(rec);
   if (lockFrames) lockRecordFrames(rec);
-  centerAndZoomActiveFrames();
+  if (autoCenter) centerAndZoomActiveFrames();
   activeRecordNo.value = recordNo;
   // активная рамка показана — кнопка «Создать рамку» недоступна
   activeFrameHidden.value = false;
@@ -1376,6 +1469,12 @@ const handleRecordAction = () => {
 };
 
 bus.on("add-record", handleRecordAction);
+
+// Строка таблицы для записи (латеральная или дорсальная часть)
+const findRecordRow = (recordNo) =>
+  rows.value.lateral.find((row) => row.record_no === recordNo) ||
+  rows.value.dorsal.find((row) => row.record_no === recordNo) ||
+  null;
 
 // Подтверждение перед удалением: запись нельзя восстановить,
 // поэтому спрашиваем пользователя и по умолчанию оставляем «Отмена».

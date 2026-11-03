@@ -1,7 +1,7 @@
 <template>
   <div class="tables-panel q-mx-md q-mb-md">
     <q-splitter v-model="descriptionSplit" class="tables-split" :limits="splitLimits"
-      :disable="!descriptionVisible">
+      :disable="!descriptionVisible || tableCollapsed">
       <template v-slot:before>
         <ResultsTable :rows="combinedRows" :selected-record-nos="selectedNos" :active-record-no="activeRecordNo"
           :show-description="descriptionVisible" @update:selected-record-nos="selectedNos = $event"
@@ -12,9 +12,10 @@
       <template v-slot:after>
         <DescriptionPanel :visible="descriptionVisible" :descriptions="descriptionsModel"
           :selected-description-id="selectedDescriptionIdModel" :description="selectedDescription"
-          :editor-mode="descriptionEditor"
+          :editor-mode="descriptionEditor" :table-collapsed="tableCollapsed"
           @update:selected-description-id="selectedDescriptionIdModel = $event"
           @toggle-description-editor="descriptionEditor = !descriptionEditor"
+          @toggle-table="tableCollapsed = !tableCollapsed"
           @update-description-markdown="updateDescriptionMarkdown"
           @delete-description="deleteDescription" />
       </template>
@@ -77,19 +78,31 @@ const descriptionVisible = computed({
 // Режим редактора описания: таблица — 1/3, описание — 2/3
 const descriptionEditor = ref(false);
 
+// Свёрнута ли таблица результатов (кнопка в заголовке описания)
+const tableCollapsed = ref(false);
+
 // Положение разделителя таблица/описание (проценты, ширина таблицы).
-// В режиме редактора описание шире; при скрытом описании таблица на всю ширину.
+// В режиме редактора описание шире; при скрытом описании таблица на всю ширину,
+// при свёрнутой таблице — описание на всю ширину.
 const descriptionSplit = ref(50);
-const splitLimits = computed(() =>
-  descriptionVisible.value ? [20, 80] : [100, 100],
-);
+const splitLimits = computed(() => {
+  if (!descriptionVisible.value) return [100, 100];
+  if (tableCollapsed.value) return [0, 0];
+  return [20, 80];
+});
 watch(
-  () => [descriptionVisible.value, descriptionEditor.value],
-  ([visible, editor]) => {
-    descriptionSplit.value = visible ? (editor ? 34 : 50) : 100;
+  () => [descriptionVisible.value, descriptionEditor.value, tableCollapsed.value],
+  ([visible, editor, collapsed]) => {
+    if (!visible) descriptionSplit.value = 100;
+    else if (collapsed) descriptionSplit.value = 0;
+    else descriptionSplit.value = editor ? 34 : 50;
   },
   { immediate: true },
 );
+// При скрытии описания таблица должна снова стать видимой
+watch(descriptionVisible, (visible) => {
+  if (!visible) tableCollapsed.value = false;
+});
 
 // Единая таблица: латеральная и дорсальная части одной записи
 const combinedRows = computed(() => mergeRowsByRecordNo(props.rows));

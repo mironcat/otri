@@ -1,21 +1,28 @@
 <template>
   <div v-show="visible" class="description-half col q-pl-md">
     <div class="row items-center q-mb-xs">
+
+      <q-btn class="q-mr-sm" size="sm" dense round flat color="primary"
+        :icon="tableCollapsed ? 'chevron_right' : 'chevron_left'"
+        :aria-label="tableCollapsed ? 'Показать таблицу результатов' : 'Скрыть таблицу результатов'"
+        @click="emit('toggle-table')">
+        <q-tooltip>{{ tableCollapsed ? 'Показать таблицу результатов' : 'Скрыть таблицу результатов' }}</q-tooltip>
+      </q-btn>
       <div class="text-subtitle2">Описание</div>
       <q-space />
       <q-btn size="sm" no-caps class="q-mr-sm" :color="editorMode ? 'secondary' : 'primary'"
         :icon="editorMode ? 'done' : 'edit'" :label="editorMode ? 'Готово' : 'Редактор описания'"
         @click="emit('toggle-description-editor')">
-        <q-tooltip>{{ editorMode ? 'Вернуться к просмотру описания' : 'Редактировать описание в формате Markdown' }}</q-tooltip>
+        <q-tooltip>{{ editorMode ? 'Вернуться к просмотру описания' : 'Редактировать описание в формате Markdown'
+        }}</q-tooltip>
       </q-btn>
       <q-btn size="sm" no-caps class="q-mr-sm" color="primary" icon="save" label="Сохранить шаблон"
         :disable="!description" @click="saveDescriptionTemplate">
         <q-tooltip>Сохранить текущий markdown как шаблон для новых описаний во всех будущих проектах</q-tooltip>
       </q-btn>
-      <q-select :model-value="selectedDescriptionId" :options="descriptions" option-value="id"
-        option-label="name" emit-value map-options dense outlined options-dense label="Описание"
-        :disable="descriptions.length === 0" class="record-select"
-        @update:model-value="emit('update:selected-description-id', $event)" />
+      <q-select :model-value="selectedDescriptionId" :options="descriptions" option-value="id" option-label="name"
+        emit-value map-options dense outlined options-dense label="Описание" :disable="descriptions.length === 0"
+        class="record-select" @update:model-value="emit('update:selected-description-id', $event)" />
       <q-btn icon="delete" flat dense round color="negative" class="q-ml-xs" :disable="!selectedDescriptionId"
         @click="emit('delete-description')">
         <q-tooltip>Удалить описание</q-tooltip>
@@ -25,9 +32,8 @@
       <div v-if="description" class="text-caption description-source">
         Записи: № {{ description.recordNos.join(", № ") }}
       </div>
-      <Description :key="description?.id" :om="description?.measurements"
-        :markdown="description?.markdown" :editor-mode="editorMode"
-        @update:markdown="emit('update-description-markdown', $event)" />
+      <Description :key="description?.id" :om="description?.measurements" :markdown="description?.markdown"
+        :editor-mode="editorMode" @update:markdown="emit('update-description-markdown', $event)" />
     </div>
   </div>
 </template>
@@ -46,11 +52,13 @@ const props = defineProps({
   selectedDescriptionId: { type: String, default: null },
   description: { type: Object, default: null },
   editorMode: { type: Boolean, default: false },
+  tableCollapsed: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
   "update:selected-description-id",
   "toggle-description-editor",
+  "toggle-table",
   "delete-description",
   "update-description-markdown",
 ]);
