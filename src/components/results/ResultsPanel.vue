@@ -1,19 +1,24 @@
 <template>
   <div class="tables-panel q-mx-md q-mb-md">
-    <div class="tables-split" :class="{ 'tables-split--editor': descriptionEditor && descriptionVisible }">
-      <ResultsTable :rows="combinedRows" :selected-record-nos="selectedNos" :active-record-no="activeRecordNo"
-        :show-description="descriptionVisible" @update:selected-record-nos="selectedNos = $event"
-        @create-description="createDescription" @export-csv="emit('export-csv')"
-        @focus-record="emit('focus-record', $event)" @edit-record="emit('edit-record', $event)"
-        @delete-record="emit('delete-record', $event)" @update:show-description="descriptionVisible = $event" />
-      <DescriptionPanel :visible="descriptionVisible" :descriptions="descriptionsModel"
-        :selected-description-id="selectedDescriptionIdModel" :description="selectedDescription"
-        :editor-mode="descriptionEditor"
-        @update:selected-description-id="selectedDescriptionIdModel = $event"
-        @toggle-description-editor="descriptionEditor = !descriptionEditor"
-        @update-description-markdown="updateDescriptionMarkdown"
-        @delete-description="deleteDescription" />
-    </div>
+    <q-splitter v-model="descriptionSplit" class="tables-split" :limits="splitLimits"
+      :disable="!descriptionVisible">
+      <template v-slot:before>
+        <ResultsTable :rows="combinedRows" :selected-record-nos="selectedNos" :active-record-no="activeRecordNo"
+          :show-description="descriptionVisible" @update:selected-record-nos="selectedNos = $event"
+          @create-description="createDescription" @export-csv="emit('export-csv')"
+          @focus-record="emit('focus-record', $event)" @edit-record="emit('edit-record', $event)"
+          @delete-record="emit('delete-record', $event)" @update:show-description="descriptionVisible = $event" />
+      </template>
+      <template v-slot:after>
+        <DescriptionPanel :visible="descriptionVisible" :descriptions="descriptionsModel"
+          :selected-description-id="selectedDescriptionIdModel" :description="selectedDescription"
+          :editor-mode="descriptionEditor"
+          @update:selected-description-id="selectedDescriptionIdModel = $event"
+          @toggle-description-editor="descriptionEditor = !descriptionEditor"
+          @update-description-markdown="updateDescriptionMarkdown"
+          @delete-description="deleteDescription" />
+      </template>
+    </q-splitter>
   </div>
 </template>
 
@@ -23,6 +28,7 @@ import { useQuasar } from "quasar";
 import { mergeRowsByRecordNo } from "@/scripts/resultsTable.js";
 import { buildAveragedDescription } from "@/scripts/resultsDescription.js";
 import { defaultDescriptionMarkdown } from "@/scripts/descriptionMarkdown.js";
+import { getDescriptionTemplate } from "@/scripts/descriptionTemplate.js";
 import ResultsTable from "@/components/results/ResultsTable.vue";
 import DescriptionPanel from "@/components/results/DescriptionPanel.vue";
 
@@ -71,6 +77,20 @@ const descriptionVisible = computed({
 // Режим редактора описания: таблица — 1/3, описание — 2/3
 const descriptionEditor = ref(false);
 
+// Положение разделителя таблица/описание (проценты, ширина таблицы).
+// В режиме редактора описание шире; при скрытом описании таблица на всю ширину.
+const descriptionSplit = ref(50);
+const splitLimits = computed(() =>
+  descriptionVisible.value ? [20, 80] : [100, 100],
+);
+watch(
+  () => [descriptionVisible.value, descriptionEditor.value],
+  ([visible, editor]) => {
+    descriptionSplit.value = visible ? (editor ? 34 : 50) : 100;
+  },
+  { immediate: true },
+);
+
 // Единая таблица: латеральная и дорсальная части одной записи
 const combinedRows = computed(() => mergeRowsByRecordNo(props.rows));
 
@@ -114,12 +134,15 @@ const createDescription = () => {
 
   const number = props.descriptions.length + 1;
   const count = records.length;
+  // Шаблон из localStorage применяется к новым описаниям; если его нет —
+  // используем встроенный шаблон, собранный по измерениям.
+  const template = getDescriptionTemplate();
   const description = {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     name: `Среднее №${number} — ${count} ${recordsWord(count)}`,
     recordNos: records.map((row) => row.record_no),
     measurements,
-    markdown: defaultDescriptionMarkdown(measurements),
+    markdown: template ?? defaultDescriptionMarkdown(measurements),
     createdAt: new Date().toISOString(),
   };
 
@@ -165,10 +188,10 @@ const deleteDescription = () => {
 
 <style>
 /* Нижняя панель: слева таблицы, справа текстовое описание.
-   Ограниченная высота + независимая прокрутка половин,
-   чтобы канвас всегда сохранял свободное место */
+   Фиксированная высота даёт q-splitter определённую высоту для панелей. */
 .tables-panel {
-  flex: 0 1 auto;
+  flex: 0 0 40vh;
+  height: 40vh;
   min-height: 0;
   max-height: 40vh;
   overflow: hidden;
@@ -178,29 +201,20 @@ const deleteDescription = () => {
 
 /* Когда холст скрыт, панель результатов занимает освободившееся место */
 .tables-panel--expanded {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
+  height: auto;
   max-height: none;
 }
 
-/* Две равные половины по горизонтали */
+/* q-splitter: таблица слева, описание справа */
 .tables-split {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-height: 0;
-  display: flex;
-}
-
-/* Режим редактора описания: таблица — треть, описание — две трети */
-.tables-split--editor .tables-half {
-  flex: 0 0 33.333%;
-  max-width: 33.333%;
-}
-
-.tables-split--editor .description-half {
-  flex: 0 0 66.667%;
-  max-width: 66.667%;
+  height: auto;
 }
 
 .tables-half {
+  height: 100%;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
@@ -208,11 +222,11 @@ const deleteDescription = () => {
 
 /* Правая половина с описанием */
 .description-half {
+  height: 100%;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--otri-border-soft);
 }
 
 /* Селектор записи в заголовке описания */
@@ -223,7 +237,8 @@ const deleteDescription = () => {
 
 /* Прокручиваемая область описания */
 .description-body {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
+  height: auto;
   min-height: 0;
   display: flex;
   flex-direction: column;

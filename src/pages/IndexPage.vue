@@ -99,7 +99,8 @@
     <ResultsPanel v-show="showTables" :class="{ 'tables-panel--expanded': canvasHidden }" :rows="rows"
       :active-record-no="activeRecordNo" v-model:selected-record-nos="selectedRecordNos"
       v-model:descriptions="generatedDescriptions" v-model:selected-description-id="selectedDescriptionId"
-      v-model:show-description="showDescription" @focus-record="focusedRecordNo = $event" @edit-record="activateRecord"
+      v-model:show-description="showDescription" @focus-record="focusedRecordNo = $event"
+      @edit-record="editRecordFromTable"
       @delete-record="confirmDeleteRecord" @export-csv="exportCombinedTable" />
   </q-page>
 </template>
@@ -382,6 +383,100 @@ const centerActiveFramesAt = (point) => {
     );
   });
   bus.emit("overlays-transformed");
+};
+
+// Поместить активные рамки в центр холста и приблизить их
+const activeFrameSets = () => {
+  const sets = [];
+  if (om.value.lateral_side) {
+    sets.push(om.value.concave_vs ? concave_lso : lso);
+  }
+  if (om.value.dorsal_side) sets.push(dso);
+  return sets.filter((obj) => obj && obj.baseFrame && obj.mobjects);
+};
+
+const frameCanvasBox = (obj) => {
+  const bf = obj.baseFrame.attr(["x", "y", "width", "height"]);
+  const x = Number(bf.x);
+  const y = Number(bf.y);
+  const w = Number(bf.width);
+  const h = Number(bf.height);
+  const m = obj.mobjects.matrixify();
+  const points = [
+    new Point(x, y).transform(m),
+    new Point(x + w, y).transform(m),
+    new Point(x + w, y + h).transform(m),
+    new Point(x, y + h).transform(m),
+  ];
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2,
+  };
+};
+
+const unionBoxes = (boxes) => {
+  if (!boxes.length) return null;
+  const minX = Math.min(...boxes.map((b) => b.x));
+  const minY = Math.min(...boxes.map((b) => b.y));
+  const maxX = Math.max(...boxes.map((b) => b.x + b.width));
+  const maxY = Math.max(...boxes.map((b) => b.y + b.height));
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2,
+  };
+};
+
+// Сдвинуть изображение и все рамки на один вектор — сцена остаётся цельной
+const moveSceneBy = (dx, dy) => {
+  moveGroupByScreenDelta(mainimage, dx, dy);
+  sceneGroups().forEach((group) => moveGroupByScreenDelta(group, dx, dy));
+  refreshFrozenTransforms();
+  bus.emit("overlays-transformed");
+};
+
+const centerAndZoomActiveFrames = () => {
+  const sets = activeFrameSets();
+  const width = Number(draw.width());
+  const height = Number(draw.height());
+  if (!sets.length || !(width > 0) || !(height > 0)) return;
+
+  const box = unionBoxes(sets.map(frameCanvasBox));
+  if (!box || !(box.width > 0) || !(box.height > 0)) return;
+
+  const canvasCenter = new Point(width / 2, height / 2);
+  const anchor = new Point(box.cx, box.cy).transform(
+    mainimage.matrixify().inverse(),
+  );
+  if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) return;
+
+  // Приближаем так, чтобы рамки занимали около 70% холста.
+  const factor = Math.min(
+    (width * 0.7) / box.width,
+    (height * 0.7) / box.height,
+  );
+  const clampedFactor = Math.min(4, Math.max(0.5, factor));
+  if (Math.abs(clampedFactor - 1) > 0.01) {
+    zoomSceneBy(clampedFactor, anchor);
+  }
+
+  // После масштабирования центрируем общий бокс активных рамок.
+  const newBox = unionBoxes(activeFrameSets().map(frameCanvasBox));
+  if (!newBox) return;
+  moveSceneBy(canvasCenter.x - newBox.cx, canvasCenter.y - newBox.cy);
 };
 
 // Позиция курсора в координатах холста. null — если курсор вне холста.
@@ -730,10 +825,25 @@ const cancelRecordEditing = () => {
   hideActiveFrame();
 };
 
+// Принудительно включаем замок для рамок активируемой записи.
+// Используется кнопкой «Редактировать рамку» в таблице результатов.
+const lockRecordFrames = (rec) => {
+  if (!om.value.settings.pinToImage) {
+    om.value.settings.pinToImage = { left: false, dorsal: false };
+  }
+  const frames = [];
+  if (rec.left || rec.concave) frames.push("left");
+  if (rec.dorsal) frames.push("dorsal");
+  frames.forEach((frame) => {
+    om.value.settings.pinToImage[frame] = true;
+    bus.emit("pin-image-toggled", { frame, value: true });
+  });
+};
+
 // Сделать запись активной: прячем её замороженную копию (зелёная рамка не мешает),
 // а предыдущую активную запись (если была) — показываем снова.
 // Повторный вызов для уже активной записи отменяет редактирование.
-const activateRecord = (recordNo) => {
+const activateRecord = (recordNo, { lockFrames = false } = {}) => {
   if (activeRecordNo.value === recordNo) {
     cancelRecordEditing();
     return;
@@ -745,6 +855,8 @@ const activateRecord = (recordNo) => {
     setFrozenVisibility(activeRecordNo.value, "0.75");
   }
   applyRecord(rec);
+  if (lockFrames) lockRecordFrames(rec);
+  centerAndZoomActiveFrames();
   activeRecordNo.value = recordNo;
   // активная рамка показана — кнопка «Создать рамку» недоступна
   activeFrameHidden.value = false;
@@ -753,6 +865,10 @@ const activateRecord = (recordNo) => {
   // скрыть frozenClone редактируемой записи
   setFrozenVisibility(recordNo, "0");
   bus.emit("record-edit-state", { editing: true });
+};
+
+const editRecordFromTable = (recordNo) => {
+  activateRecord(recordNo, { lockFrames: true });
 };
 
 // --- Синхронизация похожих точек между режимами измерения ------------------
@@ -1323,6 +1439,17 @@ const followTargets = () => [
   { frame: "dorsal", group: dso && dso.mobjects },
 ].filter((t) => t.group);
 
+// Все группы сцены: используются при центрировании/зуме на запись,
+// чтобы изображение и рамки двигались и масштабировались вместе.
+const sceneGroups = () => {
+  const groups = followTargets().map((t) => t.group);
+  if (om.value.settings.scalebar_ready && scalebar) {
+    const resizer = scalebar.get(0);
+    if (resizer) groups.push(resizer);
+  }
+  return groups;
+};
+
 // Только группы, у которых включён замок следования за картинкой.
 // Красная масштабная линейка тоже «запирается» на изображении, но не с самого
 // начала: режим замочка включается после нажатия «Задать масштаб».
@@ -1373,9 +1500,8 @@ const imagePointUnderCursor = (event) => {
 // Оверлею нужно применить ту же трансформацию, сконъюгированную матрицей
 // картинки: G = M_img · C · M_img⁻¹.
 // Работает при любом уже применённом перетаскивании/повороте/зуме картинки.
-const followZoom = (factor, anchor = null) => {
+const followZoom = (factor, anchor = null, groups = pinnedGroups()) => {
   if (factor === 1) return;
-  const groups = pinnedGroups();
   if (groups.length) {
     const mimg = mainimage.matrixify();
     const b = mainimage.bbox(); // локальный бокс содержимого картинки
@@ -1410,6 +1536,16 @@ const zoomBy = (factor, anchor = null) => {
 
 const zoomIn = () => zoomBy(1.1);
 const zoomOut = () => zoomBy(0.9);
+
+// Зум всей сцены: изображение и все рамки масштабируются вместе.
+// Используется при активации записи, чтобы приблизить конкретную рамку.
+const zoomSceneBy = (factor, anchor) => {
+  if (!Number.isFinite(factor) || factor === 1) return;
+  mainimage.scale(factor, factor, anchor.x, anchor.y);
+  followZoom(factor, anchor, sceneGroups());
+  scales.value.zoom = scales.value.zoom * factor;
+  getFactor(false);
+};
 
 // Зум колесом мыши над канвасом: один шаг 10% на «щелчок» колеса.
 // Дельта накапливается, чтобы трекпад с мелкими событиями не zoom-ил слишком быстро.
@@ -2225,8 +2361,11 @@ image {
 
 /* Канвас занимает всё свободное место по высоте страницы.
    Сама страница фиксирована по высоте вьюпорта и не скроллится,
-   поэтому скрытие/показ таблиц не может «раздуть» страницу. */
+   поэтому скрытие/показ таблиц не может «раздуть» страницу.
+   height: 0 + inline min-height от QPage даёт flex-колонке
+   определённую высоту, от которой считаются вложенные панели. */
 .canvas-page {
+  height: 0;
   overflow: hidden;
 }
 

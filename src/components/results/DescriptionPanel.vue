@@ -8,6 +8,10 @@
         @click="emit('toggle-description-editor')">
         <q-tooltip>{{ editorMode ? 'Вернуться к просмотру описания' : 'Редактировать описание в формате Markdown' }}</q-tooltip>
       </q-btn>
+      <q-btn size="sm" no-caps class="q-mr-sm" color="primary" icon="save" label="Сохранить шаблон"
+        :disable="!description" @click="saveDescriptionTemplate">
+        <q-tooltip>Сохранить текущий markdown как шаблон для новых описаний во всех будущих проектах</q-tooltip>
+      </q-btn>
       <q-select :model-value="selectedDescriptionId" :options="descriptions" option-value="id"
         option-label="name" emit-value map-options dense outlined options-dense label="Описание"
         :disable="descriptions.length === 0" class="record-select"
@@ -29,9 +33,14 @@
 </template>
 
 <script setup>
+import { useQuasar } from "quasar";
 import Description from "@/components/Description.vue";
+import { defaultDescriptionMarkdown } from "@/scripts/descriptionMarkdown.js";
+import { setDescriptionTemplate } from "@/scripts/descriptionTemplate.js";
 
-defineProps({
+const $q = useQuasar();
+
+const props = defineProps({
   visible: { type: Boolean, default: true },
   descriptions: { type: Array, default: () => [] },
   selectedDescriptionId: { type: String, default: null },
@@ -45,6 +54,31 @@ const emit = defineEmits([
   "delete-description",
   "update-description-markdown",
 ]);
+
+// Сохранить markdown текущего описания как глобальный шаблон для новых
+// описаний. Уже созданные описания (в т.ч. текущего проекта) не меняются.
+const saveDescriptionTemplate = () => {
+  if (!props.description) return;
+  const markdown =
+    props.description.markdown ??
+    defaultDescriptionMarkdown(props.description.measurements);
+  if (!markdown) return;
+
+  if (setDescriptionTemplate(markdown)) {
+    $q.notify({
+      message: "Шаблон описания сохранён",
+      color: "positive",
+      icon: "save",
+      timeout: 1500,
+    });
+  } else {
+    $q.notify({
+      message: "Не удалось сохранить шаблон",
+      color: "negative",
+      icon: "error",
+    });
+  }
+};
 </script>
 
 <style scoped>

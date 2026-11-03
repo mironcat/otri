@@ -85,7 +85,7 @@ defineExpose({ insertAtCursor });
   position: relative;
   box-sizing: border-box;
   height: 100%;
-  min-height: 180px;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--otri-border);
   border-radius: 4px;

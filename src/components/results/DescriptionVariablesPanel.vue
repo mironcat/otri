@@ -35,12 +35,11 @@ const insert = (variable) => emit("insert", token(variable));
 
 <style scoped>
 .description-vars {
-  width: 220px;
-  flex: 0 0 220px;
+  width: 100%;
+  height: 100%;
   min-height: 0;
   padding: 8px;
   overflow-y: auto;
-  border-left: 1px solid var(--otri-border-soft);
   background: var(--otri-surface);
 }
 
