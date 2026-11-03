@@ -1,6 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <div v-if="om" class="description-content">
+  <div v-if="om" class="description-content" :class="{ 'description-content--editor': editorMode }">
     <p
       v-if="om.record_no !== undefined && om.record_no !== null"
       class="description-record"
@@ -10,55 +10,18 @@
       <span v-if="om.filename">({{ om.filename }})</span>
     </p>
 
-    <h4>Общее описание</h4>
-    <p v-if="om.lateral_side">
-      Латеральная проекция: по длине раковины —
-      <strong>{{ shellLengthType || "—" }}</strong> (L = {{ fmt(om.length) }}),
-      по степени удлинённости — <strong>{{ elongation || "—" }}</strong>
-      (L/H = {{ ratio(om.length, om.height) }}),
-      <strong>{{ plenateType || "—" }}</strong>
-      (AD-l/PD-l = {{ ratio(om.ad?.hc, om.pd?.hc) }}).
-    </p>
-    <p v-if="om.lateral_side">Сторона: <strong>{{ side }}</strong>.</p>
-    <p v-if="om.dorsal_side">
-      Дорсальная проекция: по длине раковины —
-      <strong>{{ shellLengthType || "—" }}</strong> (L = {{ fmt(om.length_dorsal) }}),
-      по степени удлинённости — <strong>{{ elongation || "—" }}</strong>
-      (L/W = {{ ratio(om.length_dorsal, om.width) }}),
-      полнота — <strong>{{ fullness }}</strong>.
-    </p>
+    <!-- Режим редактора: markdown-исходник + панель переменных -->
+    <div v-if="editorMode" class="description-editor">
+      <MarkdownEditor
+        ref="editorRef"
+        v-model="editorText"
+        class="description-editor__code"
+      />
+      <DescriptionVariablesPanel :groups="variableGroups" @insert="insertToken" />
+    </div>
 
-    <template v-if="om.lateral_side">
-      <h4>Латеральная сторона</h4>
-      <p v-for="arc in lateralArcs" :key="arc.key">
-        {{ arc.name }}
-        <strong>{{ arc.orientation || "—" }}</strong>
-        ({{ arc.short }}-h/{{ arc.short }}-l = {{ ratio(arc.vc, arc.hc) }}),
-        <strong>{{ arc.steepness || "—" }}</strong>
-        ({{ arc.short }}-s/{{ arc.short }}-n = {{ ratio(arc.sln, arc.ln) }}),
-        <strong>{{ arc.position || "—" }}</strong>
-        ({{ arc.short }}-α = {{ degrees(arc.alfa) }}).
-      </p>
-
-      <h4>Брюшной край</h4>
-      <p>
-        V: lv = {{ fmt(om.v?.lv) }}, lvl = {{ fmt(om.v?.lvl) }},
-        dv = {{ fmt(om.v?.dv) }}.
-      </p>
-    </template>
-
-    <template v-if="om.dorsal_side">
-      <h4>Дорсальная сторона</h4>
-      <p v-for="arc in dorsalArcs" :key="arc.key">
-        {{ arc.name }}
-        <strong>{{ arc.orientation || "—" }}</strong>
-        ({{ arc.short }}-h/{{ arc.short }}-l = {{ ratio(arc.vc, arc.hc) }}),
-        <strong>{{ arc.steepness || "—" }}</strong>
-        ({{ arc.short }}-s/{{ arc.short }}-n = {{ ratio(arc.sln, arc.ln) }}),
-        <strong>{{ arc.position || "—" }}</strong>
-        ({{ arc.short }}-α = {{ degrees(arc.alfa) }}).
-      </p>
-    </template>
+    <!-- Режим просмотра: markdown рендерится в HTML -->
+    <div v-else class="description-rendered" v-html="renderedHtml"></div>
   </div>
   <div v-else class="description-empty">
     Нет данных для описания. Выберите созданное описание или создайте его по выбранным записям.
@@ -66,108 +29,43 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
+import MarkdownEditor from "@/components/MarkdownEditor.vue";
+import DescriptionVariablesPanel from "@/components/results/DescriptionVariablesPanel.vue";
 import {
-  getShellLengthType,
-  getPlenateType,
-  getDegreeOfElongation,
-  getSLNTypeofCurve,
-  getAlfaTypeofCurve,
-  getOrientationTypeofCurve,
-} from "@/scripts/interpretation.js";
+  DESCRIPTION_VARIABLE_GROUPS,
+  defaultDescriptionMarkdown,
+  renderDescriptionMarkdown,
+} from "@/scripts/descriptionMarkdown.js";
 
 const props = defineProps({
   om: { type: Object, default: null },
+  markdown: { type: String, default: null },
+  editorMode: { type: Boolean, default: false },
 });
 
-const LATERAL_ARCS = [
-  { key: "ad", short: "AD", name: "Передне-спинная дуга (AD)" },
-  { key: "pd", short: "PD", name: "Задне-спинная дуга (PD)" },
-  { key: "av", short: "AV", name: "Передне-брюшная дуга (AV)" },
-  { key: "pv", short: "PV", name: "Задне-брюшная дуга (PV)" },
-];
+const emit = defineEmits(["update:markdown"]);
 
-const DORSAL_ARCS = [
-  { key: "ar", short: "AR", name: "Передне-правая дуга (AR)" },
-  { key: "pr", short: "PR", name: "Задне-правая дуга (PR)" },
-  { key: "al", short: "AL", name: "Передне-левая дуга (AL)" },
-  { key: "pl", short: "PL", name: "Задне-левая дуга (PL)" },
-];
+const variableGroups = DESCRIPTION_VARIABLE_GROUPS;
 
-const buildArcs = (source, definitions) =>
-  definitions.map(({ key, short, name }) => {
-    const arc = source[key] || {};
-    return {
-      key,
-      short,
-      name,
-      orientation:
-        arc.hc || arc.vc ? getOrientationTypeofCurve(arc) : "",
-      steepness: getSLNTypeofCurve(arc.ln ? arc.sln / arc.ln : NaN),
-      position: getAlfaTypeofCurve(arc.alfa),
-      hc: arc.hc,
-      vc: arc.vc,
-      sln: arc.sln,
-      ln: arc.ln,
-      alfa: arc.alfa,
-    };
-  });
-
-const lateralArcs = computed(() => {
-  if (!props.om?.lateral_side) return [];
-  return buildArcs(props.om, LATERAL_ARCS);
-});
-
-const dorsalArcs = computed(() => {
-  if (!props.om?.dorsal_side) return [];
-  return buildArcs(props.om, DORSAL_ARCS);
-});
-
-const length = computed(() => {
-  const om = props.om;
-  if (!om) return 0;
-  return om.length > 0 ? om.length : om.length_dorsal;
-});
-
-const height = computed(() => {
-  const om = props.om;
-  if (!om) return 0;
-  return om.height > 0 ? om.height : om.width;
-});
-
-const shellLengthType = computed(() => getShellLengthType(length.value));
-
-const elongation = computed(() =>
-  getDegreeOfElongation(length.value, height.value),
+// markdown-источник: сохранённый текст либо дефолт, собранный по измерениям.
+const markdownSource = computed(
+  () => props.markdown ?? defaultDescriptionMarkdown(props.om),
 );
 
-const plenateType = computed(() =>
-  getPlenateType(props.om?.ad?.hc / props.om?.pd?.hc),
+const renderedHtml = computed(() =>
+  renderDescriptionMarkdown(markdownSource.value, props.om),
 );
 
-const side = computed(() => (props.om?.side === "right" ? "правая" : "левая"));
+// Локальный буфер редактора (компонент перемонтируется при смене описания).
+const editorText = ref(markdownSource.value);
 
-const fullness = computed(() =>
-  props.om?.fullness === "half" ? "половина" : "полная",
-);
+const editorRef = ref(null);
 
-const fmt = (value) => {
-  const number = Number(value);
-  return Number.isFinite(number) ? number.toFixed(1) : "—";
-};
+watch(editorText, (value) => emit("update:markdown", value));
 
-const ratio = (a, b) => {
-  const x = Number(a);
-  const y = Number(b);
-  return Number.isFinite(x) && Number.isFinite(y) && y !== 0
-    ? (x / y).toFixed(2)
-    : "—";
-};
-
-const degrees = (value) => {
-  const number = Number(value);
-  return Number.isFinite(number) ? `${number.toFixed(1)}°` : "—";
-};
+// Вставка плейсхолдера в позицию курсора.
+const insertToken = (token) => editorRef.value?.insertAtCursor(token);
 </script>
 
 <style scoped>
@@ -176,18 +74,12 @@ const degrees = (value) => {
   line-height: 1.5;
 }
 
-.description-content h4 {
-  margin: 10px 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.description-content h4:first-of-type {
-  margin-top: 0;
-}
-
-.description-content p {
-  margin: 0 0 6px;
+/* В режиме редактора содержимое занимает всю доступную высоту */
+.description-content--editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .description-record {
@@ -198,5 +90,49 @@ const degrees = (value) => {
 .description-empty {
   color: var(--otri-text-subtle);
   font-size: 13px;
+}
+
+/* Редактор: слева код, справа панель переменных.
+   Обе колонки растягиваются на всю высоту и прокручиваются внутри. */
+.description-editor {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.description-editor__code {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Стили отрендеренного markdown (v-html) */
+.description-rendered :deep(h1),
+.description-rendered :deep(h2),
+.description-rendered :deep(h3),
+.description-rendered :deep(h4) {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.description-rendered :deep(h2:first-child) {
+  margin-top: 0;
+}
+
+.description-rendered :deep(p) {
+  margin: 0 0 6px;
+}
+
+.description-rendered :deep(ul) {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+
+.description-rendered :deep(li) {
+  margin: 0 0 2px;
 }
 </style>

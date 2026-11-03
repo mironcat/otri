@@ -4,8 +4,9 @@
       <div class="text-subtitle2">Описание</div>
       <q-space />
       <q-btn size="sm" no-caps class="q-mr-sm" :color="editorMode ? 'secondary' : 'primary'"
-        label="Редактор описания" @click="emit('toggle-description-editor')">
-        <q-tooltip>{{ editorMode ? 'Вернуть обычную ширину' : 'Развернуть область описания' }}</q-tooltip>
+        :icon="editorMode ? 'done' : 'edit'" :label="editorMode ? 'Готово' : 'Редактор описания'"
+        @click="emit('toggle-description-editor')">
+        <q-tooltip>{{ editorMode ? 'Вернуться к просмотру описания' : 'Редактировать описание в формате Markdown' }}</q-tooltip>
       </q-btn>
       <q-select :model-value="selectedDescriptionId" :options="descriptions" option-value="id"
         option-label="name" emit-value map-options dense outlined options-dense label="Описание"
@@ -20,7 +21,9 @@
       <div v-if="description" class="text-caption description-source">
         Записи: № {{ description.recordNos.join(", № ") }}
       </div>
-      <Description :om="description?.measurements" />
+      <Description :key="description?.id" :om="description?.measurements"
+        :markdown="description?.markdown" :editor-mode="editorMode"
+        @update:markdown="emit('update-description-markdown', $event)" />
     </div>
   </div>
 </template>
@@ -40,6 +43,7 @@ const emit = defineEmits([
   "update:selected-description-id",
   "toggle-description-editor",
   "delete-description",
+  "update-description-markdown",
 ]);
 </script>
 

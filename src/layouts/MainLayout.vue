@@ -15,15 +15,15 @@
 
           <q-btn flat dense round icon="border_horizontal" :color="guidesVisible.h ? 'pink-4' : 'grey-6'"
             aria-label="Показать или скрыть горизонтальную направляющую" @click="toggleGuide('h')">
-            <q-tooltip>Горизонтальная направляющая</q-tooltip>
+            <q-tooltip>Горизонтальная направляющая (клавиша 1)</q-tooltip>
           </q-btn>
           <q-btn flat dense round icon="border_vertical" :color="guidesVisible.v1 ? 'pink-4' : 'grey-6'"
             aria-label="Показать или скрыть вертикальную направляющую 1" @click="toggleGuide('v1')">
-            <q-tooltip>Вертикальная направляющая 1</q-tooltip>
+            <q-tooltip>Левая вертикальная направляющая (клавиша 2)</q-tooltip>
           </q-btn>
           <q-btn flat dense round icon="border_vertical" :color="guidesVisible.v2 ? 'pink-4' : 'grey-6'"
             aria-label="Показать или скрыть вертикальную направляющую 2" @click="toggleGuide('v2')">
-            <q-tooltip>Вертикальная направляющая 2</q-tooltip>
+            <q-tooltip>Правая вертикальная направляющая (клавиша 3)</q-tooltip>
           </q-btn>
           <q-btn flat dense round icon="search" :color="magnifierVisible ? 'pink-4' : 'grey-6'"
             aria-label="Лупа" @click="toggleMagnifier">
@@ -218,6 +218,38 @@ function toggleGuide(key) {
   guidesVisible.value[key] = !guidesVisible.value[key];
   setGuideVisible(key, guidesVisible.value[key]);
 }
+
+// Горячие клавиши направляющих: 1 — горизонтальная, 2 — левая
+// вертикальная, 3 — правая вертикальная. В полях ввода и при зажатых
+// модификаторах не срабатывают, чтобы не мешать набору текста.
+const GUIDE_KEYS = {
+  Digit1: "h",
+  Digit2: "v1",
+  Digit3: "v2",
+  Numpad1: "h",
+  Numpad2: "v1",
+  Numpad3: "v2",
+};
+function onGuideKeydown(event) {
+  if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
+  const key = GUIDE_KEYS[event.code];
+  if (!key) return;
+  const target = event.target;
+  if (
+    target &&
+    target !== window &&
+    (target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT" ||
+      target.isContentEditable)
+  ) {
+    return;
+  }
+  event.preventDefault();
+  toggleGuide(key);
+}
+onMounted(() => window.addEventListener("keydown", onGuideKeydown));
+onBeforeUnmount(() => window.removeEventListener("keydown", onGuideKeydown));
 
 const magnifierVisible = ref(getMagnifierVisible());
 function toggleMagnifier() {

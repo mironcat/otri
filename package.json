@@ -31,8 +31,12 @@
     "@svgdotjs/svg.draggable.js": "^3.0.3",
     "@svgdotjs/svg.js": "^3.2.0",
     "apexcharts": "^8.7.0",
+    "prismjs": "^1.30.0",
     "quasar": "^2.35.2",
+    "remark-html": "^16.0.1",
+    "remark-parse": "^11.0.0",
     "simple-statistics": "^8.0.0",
+    "unified": "^11.0.5",
     "vue": "^3.5.44",
     "vue-router": "^5.4.0",
     "vue3-apexcharts": "^1.11.3"

@@ -11,6 +11,7 @@
         :editor-mode="descriptionEditor"
         @update:selected-description-id="selectedDescriptionIdModel = $event"
         @toggle-description-editor="descriptionEditor = !descriptionEditor"
+        @update-description-markdown="updateDescriptionMarkdown"
         @delete-description="deleteDescription" />
     </div>
   </div>
@@ -21,6 +22,7 @@ import { computed, ref, watch } from "vue";
 import { useQuasar } from "quasar";
 import { mergeRowsByRecordNo } from "@/scripts/resultsTable.js";
 import { buildAveragedDescription } from "@/scripts/resultsDescription.js";
+import { defaultDescriptionMarkdown } from "@/scripts/descriptionMarkdown.js";
 import ResultsTable from "@/components/results/ResultsTable.vue";
 import DescriptionPanel from "@/components/results/DescriptionPanel.vue";
 
@@ -116,12 +118,22 @@ const createDescription = () => {
     name: `Среднее №${number} — ${count} ${recordsWord(count)}`,
     recordNos: records.map((row) => row.record_no),
     measurements,
+    markdown: defaultDescriptionMarkdown(measurements),
     createdAt: new Date().toISOString(),
   };
 
   descriptionsModel.value = [...props.descriptions, description];
   selectedDescriptionIdModel.value = description.id;
   descriptionVisible.value = true;
+};
+
+// Обновить markdown-текст выбранного описания
+const updateDescriptionMarkdown = (markdown) => {
+  const description = selectedDescription.value;
+  if (!description) return;
+  descriptionsModel.value = props.descriptions.map((item) =>
+    item.id === description.id ? { ...item, markdown } : item,
+  );
 };
 
 // Удалить выбранное описание, выбрав соседнее оставшееся
@@ -212,6 +224,8 @@ const deleteDescription = () => {
 .description-body {
   flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   border: 1px solid var(--otri-border);
   border-radius: 4px;
